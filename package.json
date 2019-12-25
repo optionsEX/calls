@@ -8,5 +8,8 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
-  "devDependencies": {}
+  "devDependencies": {},
+  "dependencies": {
+    "moment": "^2.24.0"
+  }
 }
