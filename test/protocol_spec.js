@@ -7,6 +7,10 @@ const { toEth, createERC20Instance } = require('../utils/testUtils')
 let expiration = moment().add(3, 'weeks')
 const strike = toEth('300')
 const call = 0, put = 1
+const strike100 = '100000000000000000000'
+const discount95 = '950000000000000000'
+const noDiscount = '1000000000000000000'
+
 
 let accounts;
 
@@ -58,5 +62,35 @@ contract("DSFProtocol", function() {
       const balance = await optionToken.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, '0')
     })
+  })
+
+  describe("auction pricing", async () => {
+
+    it('calculates put option price at t=0', async () => {
+      const elapsed = 0
+      const price = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, noDiscount).call()
+      assert.strictEqual(price, '0')
+      const dPrice = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, discount95).call()
+      assert.strictEqual(dPrice, '0')
+    })
+
+    it('calculates put option price at t=6h', async () => {
+      const elapsed = 6 * 3600
+
+      const price = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, noDiscount).call()
+      assert.strictEqual(price, '50000000000000000000')
+      const dPrice = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, discount95).call()
+      assert.strictEqual(dPrice, '52631578947368421052')
+    })
+
+    it('calculates put option price at t=12h', async () => {
+      const elapsed = 12 * 3600
+
+      const price = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, noDiscount).call()
+      assert.strictEqual(price, '100000000000000000000')
+      const dPrice = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, discount95).call()
+      assert.strictEqual(dPrice, '100000000000000000000')
+    })
+
   })
 })
