@@ -1,7 +1,8 @@
 /*global contract, it*/
 const protocol = require('Embark/contracts/DSFProtocol');
+const ERC20 = require('Embark/contracts/ERC20')
 const moment = require('moment')
-const { toEth } = require('../utils/testUtils')
+const { toEth, createERC20Instance } = require('../utils/testUtils')
 
 let expiration = moment().add(3, 'weeks')
 const strike = toEth('300')
@@ -39,11 +40,23 @@ contract("DSFProtocol", function() {
   describe("option token", async() => {
     let optionToken
 
-    it('creates an option token', async () => {
+    it('creates an option token series', async () => {
       const issue = await protocol.methods.issue('JUL 4 300-CALL', '7/4 300-C', expiration.unix(), call, strike).send({from: accounts[0]})
       const { events: { OptionTokenCreated } } = issue
       assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated')
-      optionToken = OptionTokenCreated.returnValues.token
+      optionToken = createERC20Instance(OptionTokenCreated.returnValues.token)
+    })
+
+    it('opens option token position', async () => {
+      const opened = await protocol.methods.open(optionToken._address, toEth('1')).send({from: accounts[0], value: toEth('1')})
+      const balance = await optionToken.methods.balanceOf(accounts[0]).call()
+      assert.strictEqual(balance, toEth('1'))
+    })
+
+    it('closes option token', async () => {
+      const closed = await protocol.methods.close(optionToken._address, toEth('1')).send({from: accounts[0]})
+      const balance = await optionToken.methods.balanceOf(accounts[0]).call()
+      assert.strictEqual(balance, '0')
     })
   })
 })
