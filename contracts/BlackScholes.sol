@@ -2,7 +2,7 @@ pragma solidity >=0.5.0 <0.7.0;
 import "./ABDKMathQuad.sol";
 import "./NormalDist.sol";
 
-contract BlackScholesEstimate {
+contract BlackScholes is NormalDist {
     using ABDKMathQuad for uint256;
     using ABDKMathQuad for bytes16;
     using ABDKMathQuad for int256;
@@ -10,18 +10,21 @@ contract BlackScholesEstimate {
     bytes16 private constant DAYS_365 = 0x40076d00000000000000000000000000;
     bytes16 private constant NEGATIVE_ONE = 0xbfff0000000000000000000000000000;
     bytes16 private constant TWO = 0x40000000000000000000000000000000;
-
-    NormalDist public normalDist;
+    bytes16 ONE_YEAR_SECONDS = 0x4017e187e00000000000000000000000;
 
     enum Flavor {
         Call,
         Put
     }
 
-    constructor(address _normalDist) public {
-        normalDist = NormalDist(_normalDist);
+    struct Intermediates {
+      bytes16 d1Right;
+      bytes16 d1Left;
+      bytes16 d1Numerator;
+      bytes16 d1Denominator;
+      bytes16 d1;
+      bytes16 eToNegRT;
     }
-
 
     /**
      * @dev sqrt calculates the square root of a given number x
@@ -41,7 +44,7 @@ contract BlackScholesEstimate {
 
 
     function testNorm(uint x) public returns(uint256) {
-        return normalDist.stdNormCDF(x);
+        return stdNormCDF(x);
     }
 
     function callOptionPrice(
@@ -52,8 +55,8 @@ contract BlackScholesEstimate {
         bytes16 eToNegRT
     ) internal view returns (bytes16) {
         bytes16 d2 = d1.sub(d1Denominator);
-        bytes16 cdfD1 = normalDist.cdf(d1);
-        bytes16 cdfD2 = normalDist.cdf(d2);
+        bytes16 cdfD1 = cdf(d1);
+        bytes16 cdfD2 = cdf(d2);
         bytes16 priceCdf = price.mul(cdfD1);
         bytes16 strikeBy = strike.mul(eToNegRT).mul(cdfD2);
         return priceCdf.sub(strikeBy);
@@ -67,11 +70,63 @@ contract BlackScholesEstimate {
         bytes16 eToNegRT
     ) internal view returns (bytes16) {
         bytes16 d2 = d1Denominator.sub(d1);
-        bytes16 cdfD1 = normalDist.cdf(d1.neg());
-        bytes16 cdfD2 = normalDist.cdf(d2);
+        bytes16 cdfD1 = cdf(d1.neg());
+        bytes16 cdfD2 = cdf(d2);
         bytes16 priceCdf = price.mul(cdfD1);
         bytes16 strikeBy = strike.mul(eToNegRT).mul(cdfD2);
         return strikeBy.sub(priceCdf);
+    }
+
+    /**
+     * @dev retBlackScholesCalc returns the black scholes theoretical price for an option
+     * @param strike uint256 strike price of the underlying
+     * @param price uint256 price of the underlying asset
+     * @param expiration uint256 expiration time of option as a unix timestamp
+     * @param vol uint256 volatility passed in as decimal * 100
+     * @param rfr uint256 risk free rate as a decimal * 100
+     * @param flavor Flavor Call|Put
+     */
+
+    function retBlackScholesCalc(
+        uint price,
+        uint strike,
+        uint expiration,
+        uint vol,
+        uint rfr,
+        Flavor flavor
+    ) public view returns (uint) {
+        bytes16 HUNDRED = uint(100).fromUInt();
+        bytes16 dec = uint(10**18).fromUInt();
+        bytes16 res = blackScholesCalc(
+          price.fromUInt().div(dec),
+          strike.fromUInt().div(dec),
+          uint(expiration - now).fromUInt().div(ONE_YEAR_SECONDS),
+          uint(vol).fromUInt().div(HUNDRED),
+          uint(rfr).fromUInt().div(HUNDRED),
+          flavor
+         );
+         return res.mul(HUNDRED).toUInt();
+    }
+
+    function getIntermediates(
+          bytes16 price,
+          bytes16 strike,
+          bytes16 time,
+          bytes16 vol,
+          bytes16 rfr
+    ) internal pure returns (Intermediates memory) {
+      bytes16 d1Right = vol.mul(vol).div(TWO).add(rfr).mul(time);
+      bytes16 d1Left = price.div(strike).ln();
+      bytes16 d1Numerator = d1Left.add(d1Right);
+      bytes16 d1Denominator = vol.mul(time.sqrt());
+      return Intermediates({
+            d1Right: d1Right,
+            d1Left: d1Left,
+            d1Numerator: d1Numerator,
+            d1Denominator: d1Denominator,
+            d1: d1Numerator.div(d1Denominator),
+            eToNegRT: rfr.mul(time).neg().exp()
+        });
     }
 
     function blackScholesCalc(
@@ -82,29 +137,12 @@ contract BlackScholesEstimate {
          bytes16 rfr,
          Flavor flavor
     ) public view returns (bytes16) {
-        bytes16 d1Right = vol.mul(vol).div(TWO).add(rfr).mul(time);
-        bytes16 d1Left = price.div(strike).ln();
-        bytes16 d1Numerator = d1Left.add(d1Right);
-        bytes16 d1Denominator = vol.mul(time.sqrt());
-        bytes16 d1 = d1Numerator.div(d1Denominator);
-        bytes16 eToNegRT = rfr.mul(time).neg().exp();
+        Intermediates memory i = getIntermediates(price, strike, time, vol, rfr);
 
         if (flavor == Flavor.Call) {
-            return callOptionPrice(d1, d1Denominator, price, strike, eToNegRT);
-        //    bytes16 d2 = d1.sub(d1Denominator);
-        //    bytes16 cdfD1 = normalDist.cdf(d1);
-        //    bytes16 cdfD2 = normalDist.cdf(d2);
-        //    bytes16 priceCdf = price.mul(cdfD1);
-        //    bytes16 strikeBy = strike.mul(eToNegRT).mul(d2);
-        //    return priceCdf.sub(strikeBy);
+            return callOptionPrice(i.d1, i.d1Denominator, price, strike, i.eToNegRT);
         } else {
-            return putOptionPrice(d1, d1Denominator, price, strike, eToNegRT);
-        //    bytes16 d2 = d1Denominator.sub(d1);
-        //    bytes16 cdfD1 = normalDist.cdf(d1.neg());
-        //    bytes16 cdfD2 = normalDist.cdf(d2);
-        //    bytes16 priceCdf = price.mul(cdfD1);
-        //    bytes16 strikeBy = strike.mul(eToNegRT).mul(d2);
-        //    return strikeBy.sub(priceCdf);
+            return putOptionPrice(i.d1, i.d1Denominator, price, strike, i.eToNegRT);
         }
     }
 
