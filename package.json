@@ -10,6 +10,7 @@
   "license": "MIT",
   "devDependencies": {},
   "dependencies": {
+    "black-scholes": "^1.1.0",
     "moment": "^2.24.0"
   }
 }

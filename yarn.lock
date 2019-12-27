@@ -2,6 +2,11 @@
 # yarn lockfile v1
 
 
+black-scholes@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/black-scholes/-/black-scholes-1.1.0.tgz#2db77cfaf48ff9dae0d5d03693aeb02ef22f9b09"
+  integrity sha1-Lbd8+vSP+drg1dA2k66wLvIvmwk=
+
 moment@^2.24.0:
   version "2.24.0"
   resolved "https://registry.yarnpkg.com/moment/-/moment-2.24.0.tgz#0d055d53f5052aa653c9f6eb68bb5d12bf5c2b5b"
