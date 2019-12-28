@@ -20,9 +20,6 @@ contract BlackScholes is NormalDist {
     }
 
     struct Intermediates {
-      bytes16 d1Right;
-      bytes16 d1Left;
-      bytes16 d1Numerator;
       bytes16 d1Denominator;
       bytes16 d1;
       bytes16 eToNegRT;
@@ -120,9 +117,6 @@ contract BlackScholes is NormalDist {
       bytes16 d1Numerator = d1Left.add(d1Right);
       bytes16 d1Denominator = vol.mul(time.sqrt());
       return Intermediates({
-            d1Right: d1Right,
-            d1Left: d1Left,
-            d1Numerator: d1Numerator,
             d1Denominator: d1Denominator,
             d1: d1Numerator.div(d1Denominator),
             eToNegRT: rfr.mul(time).neg().exp()
@@ -138,7 +132,6 @@ contract BlackScholes is NormalDist {
          Flavor flavor
     ) public view returns (bytes16) {
         Intermediates memory i = getIntermediates(price, strike, time, vol, rfr);
-
         if (flavor == Flavor.Call) {
             return callOptionPrice(i.d1, i.d1Denominator, price, strike, i.eToNegRT);
         } else {
