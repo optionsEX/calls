@@ -10,6 +10,8 @@ contract BlackScholes is NormalDist {
     bytes16 private constant DAYS_365 = 0x40076d00000000000000000000000000;
     bytes16 private constant NEGATIVE_ONE = 0xbfff0000000000000000000000000000;
     bytes16 private constant TWO = 0x40000000000000000000000000000000;
+    bytes16 private constant HUNDRED = 0x40059000000000000000000000000000;
+    bytes16 private constant DECIMAL_PLACE = 0x403abc16d674ec800000000000000000;
     bytes16 ONE_YEAR_SECONDS = 0x4017e187e00000000000000000000000;
 
     enum Flavor {
@@ -95,17 +97,15 @@ contract BlackScholes is NormalDist {
         uint rfr,
         Flavor flavor
     ) public view returns (uint) {
-        bytes16 HUNDRED = uint(100).fromUInt();
-        bytes16 dec = uint(10**18).fromUInt();
         bytes16 res = blackScholesCalc(
-          price.fromUInt().div(dec),
-          strike.fromUInt().div(dec),
+          price.fromUInt().div(DECIMAL_PLACE),
+          strike.fromUInt().div(DECIMAL_PLACE),
           uint(expiration - now).fromUInt().div(ONE_YEAR_SECONDS),
           uint(vol).fromUInt().div(HUNDRED),
           uint(rfr).fromUInt().div(HUNDRED),
           flavor
          );
-         return res.mul(HUNDRED).toUInt();
+         return res.mul(DECIMAL_PLACE).toUInt();
     }
 
     function getIntermediates(
