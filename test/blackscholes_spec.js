@@ -3,17 +3,14 @@ const BlackScholes = require('Embark/contracts/BlackScholes');
 const ERC20 = require('Embark/contracts/ERC20');
 const moment = require('moment');
 const bs = require('black-scholes');
-const { toEth, createERC20Instance } = require('../utils/testUtils')
+const { toEth, createERC20Instance, fromWei } = require('../utils/testUtils')
 
 const SECONDS_IN_DAY = 86400;
 const SECONDS_IN_YEAR = SECONDS_IN_DAY * 365.25;
 
 const genOptionTime = (now, future) => (future.unix() - now.unix()) / SECONDS_IN_YEAR
-const compareBS = (local, remote) => {
-  const lSanitized = Math.trunc(local * 100);
-  const rSanitized = Number(remote);
-  return lSanitized - rSanitized;
-}
+const compareBS = (local, remote) => Math.abs(local - fromWei(remote))
+const lessThanCent = (local, remote) => compareBS(local, remote) <= 0.01
 
 let expiration = moment().add(3, 'weeks')
 const strike = toEth('300')
@@ -58,7 +55,7 @@ contract("BlackScholes", function() {
       const rfr = 3;
       const localBS = bs.blackScholes(300, 250, time, .15, .03, "call");
       const contractBS = await BlackScholes.methods.retBlackScholesCalc(price, strike, oneYear.unix(), vol, rfr, call).call();
-      assert.strictEqual(compareBS(localBS, contractBS), 0, "difference more than one cent")
+      assert.strictEqual(lessThanCent(localBS, contractBS), true, "difference more than one cent")
     })
   })
 })

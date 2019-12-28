@@ -7,3 +7,7 @@ module.exports.toEth = function(str) {
 module.exports.createERC20Instance = function(address) {
   return new web3.eth.Contract(ERC20._jsonInterface, address)
 }
+
+module.exports.fromWei = function(str) {
+  return Number(str) / 10**18
+}
