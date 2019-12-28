@@ -41,24 +41,23 @@ contract BlackScholes is NormalDist {
         return b;
     }
 
-
-    function testNorm(uint x) public returns(uint256) {
-        return stdNormCDF(x);
-    }
-
     function callOptionPrice(
         bytes16 d1,
         bytes16 d1Denominator,
         bytes16 price,
         bytes16 strike,
         bytes16 eToNegRT
-    ) internal view returns (bytes16) {
-        bytes16 d2 = d1.sub(d1Denominator);
-        bytes16 cdfD1 = cdf(d1);
-        bytes16 cdfD2 = cdf(d2);
-        bytes16 priceCdf = price.mul(cdfD1);
-        bytes16 strikeBy = strike.mul(eToNegRT).mul(cdfD2);
-        return priceCdf.sub(strikeBy);
+    )
+      internal
+      pure
+      returns (bytes16)
+    {
+      bytes16 d2 = d1.sub(d1Denominator);
+      bytes16 cdfD1 = cdf(d1);
+      bytes16 cdfD2 = cdf(d2);
+      bytes16 priceCdf = price.mul(cdfD1);
+      bytes16 strikeBy = strike.mul(eToNegRT).mul(cdfD2);
+      return priceCdf.sub(strikeBy);
     }
 
     function putOptionPrice(
@@ -67,13 +66,17 @@ contract BlackScholes is NormalDist {
         bytes16 price,
         bytes16 strike,
         bytes16 eToNegRT
-    ) internal view returns (bytes16) {
-        bytes16 d2 = d1Denominator.sub(d1);
-        bytes16 cdfD1 = cdf(d1.neg());
-        bytes16 cdfD2 = cdf(d2);
-        bytes16 priceCdf = price.mul(cdfD1);
-        bytes16 strikeBy = strike.mul(eToNegRT).mul(cdfD2);
-        return strikeBy.sub(priceCdf);
+    )
+      internal
+      pure
+      returns (bytes16)
+    {
+      bytes16 d2 = d1Denominator.sub(d1);
+      bytes16 cdfD1 = cdf(d1.neg());
+      bytes16 cdfD2 = cdf(d2);
+      bytes16 priceCdf = price.mul(cdfD1);
+      bytes16 strikeBy = strike.mul(eToNegRT).mul(cdfD2);
+      return strikeBy.sub(priceCdf);
     }
 
     /**
@@ -93,8 +96,12 @@ contract BlackScholes is NormalDist {
         uint vol,
         uint rfr,
         Flavor flavor
-    ) public view returns (uint) {
-        bytes16 res = blackScholesCalc(
+    )
+      public
+      view
+      returns (uint)
+    {
+      bytes16 res = blackScholesCalc(
           price.fromUInt().div(DECIMAL_PLACE),
           strike.fromUInt().div(DECIMAL_PLACE),
           uint(expiration - now).fromUInt().div(ONE_YEAR_SECONDS),
@@ -102,16 +109,20 @@ contract BlackScholes is NormalDist {
           uint(rfr).fromUInt().div(HUNDRED),
           flavor
          );
-         return res.mul(DECIMAL_PLACE).toUInt();
+      return res.mul(DECIMAL_PLACE).toUInt();
     }
 
     function getIntermediates(
-          bytes16 price,
-          bytes16 strike,
-          bytes16 time,
-          bytes16 vol,
-          bytes16 rfr
-    ) internal pure returns (Intermediates memory) {
+        bytes16 price,
+        bytes16 strike,
+        bytes16 time,
+        bytes16 vol,
+        bytes16 rfr
+    )
+      internal
+      pure
+      returns (Intermediates memory)
+    {
       bytes16 d1Right = vol.mul(vol).div(TWO).add(rfr).mul(time);
       bytes16 d1Left = price.div(strike).ln();
       bytes16 d1Numerator = d1Left.add(d1Right);
@@ -130,13 +141,17 @@ contract BlackScholes is NormalDist {
          bytes16 vol,
          bytes16 rfr,
          Flavor flavor
-    ) public view returns (bytes16) {
-        Intermediates memory i = getIntermediates(price, strike, time, vol, rfr);
-        if (flavor == Flavor.Call) {
-            return callOptionPrice(i.d1, i.d1Denominator, price, strike, i.eToNegRT);
-        } else {
-            return putOptionPrice(i.d1, i.d1Denominator, price, strike, i.eToNegRT);
-        }
+    )
+      public
+      pure
+      returns (bytes16)
+    {
+      Intermediates memory i = getIntermediates(price, strike, time, vol, rfr);
+      if (flavor == Flavor.Call) {
+        return callOptionPrice(i.d1, i.d1Denominator, price, strike, i.eToNegRT);
+      } else {
+        return putOptionPrice(i.d1, i.d1Denominator, price, strike, i.eToNegRT);
+      }
     }
 
     /**
