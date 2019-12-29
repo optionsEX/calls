@@ -11,6 +11,7 @@ import "./BidderInterface.sol";
 contract DSFProtocol is DSFProtocolTypes {
 
     string public constant VERSION = "1.0";
+    address public ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     ERC20 public usdERC20;
     ERC20 public protocolToken;
@@ -24,8 +25,8 @@ contract DSFProtocol is DSFProtocolTypes {
     mapping(address => mapping(address => uint)) public writers;
     mapping(address => OptionSeries) public seriesInfo;
     mapping(address => uint) public holdersSettlement;
-
     mapping(address => uint) public expectValue;
+    mapping(bytes32 => bool) public seriesExists;
     bool isAuction;
 
 
@@ -43,11 +44,16 @@ contract DSFProtocol is DSFProtocolTypes {
     event OptionTokenCreated(address token);
     // Note, this just creates an option token, it doesn't guarantee
     // settlement of that token. For guaranteed settlement see the DSFProtocolProxy contract(s)
-    function issue(string memory name, string memory symbol, uint expiration, Flavor flavor, uint strike) public returns (address) {
+    function issue(address underlying, address strikeAsset, uint expiration, Flavor flavor, uint strike) public returns (address) {
         require(expiration > now);
         require(strike > 1 ether);
-        address series = address(new OptionToken(name, symbol));
-        seriesInfo[series] = OptionSeries(expiration, flavor, strike);
+        address u = underlying == address(0) ? ETH : underlying;
+        address s = strikeAsset == address(0) ? address(usdERC20) : strikeAsset;
+        bytes32 issuanceHash = getIssuanceHash(underlying, strikeAsset, expiration, flavor, strike);
+        require(seriesExists[issuanceHash] == false, "Series already exists");
+        address series = address(new OptionToken(issuanceHash));
+        seriesInfo[series] = OptionSeries(expiration, flavor, strike, u, s);
+        seriesExists[issuanceHash] = true;
         emit OptionTokenCreated(series);
         return series;
     }
@@ -255,6 +261,19 @@ contract DSFProtocol is DSFProtocolTypes {
         usd = holdersSettlement[_series] * percent / 1 ether;
         usdERC20.transfer(msg.sender, usd);
         return usd;
+    }
+
+    /**
+     * Helper function for computing the hash of a given issuance.
+     */
+    function getIssuanceHash(address underlying, address strikeAsset, uint expiration, Flavor flavor, uint strike)
+      internal
+      pure
+      returns(bytes32)
+    {
+      return keccak256(
+         abi.encodePacked(underlying, strikeAsset, expiration, flavor, strike)
+      );
     }
 
     // map preference to a discount factor between 0.95 and 1

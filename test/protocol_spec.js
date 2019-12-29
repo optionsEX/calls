@@ -4,6 +4,7 @@ const ERC20 = require('Embark/contracts/ERC20')
 const moment = require('moment')
 const { toEth, createERC20Instance } = require('../utils/testUtils')
 
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 let expiration = moment().add(3, 'weeks')
 const strike = toEth('300')
 const call = 0, put = 1
@@ -45,7 +46,7 @@ contract("DSFProtocol", function() {
     let optionToken
 
     it('creates an option token series', async () => {
-      const issue = await protocol.methods.issue('JUL 4 300-CALL', '7/4 300-C', expiration.unix(), call, strike).send({from: accounts[0]})
+      const issue = await protocol.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), call, strike).send({from: accounts[0]})
       const { events: { OptionTokenCreated } } = issue
       assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated')
       optionToken = createERC20Instance(OptionTokenCreated.returnValues.token)

@@ -4,9 +4,8 @@ import "./VariableSupplyToken.sol";
 
 
 contract OptionToken is VariableSupplyToken {
-    constructor(string memory _name, string memory _symbol) public {
+    constructor(bytes32 _issuanceHash) public {
         creator = msg.sender;
-        name = _name;
-        symbol = _symbol;
+        issuanceHash = _issuanceHash;
     }
 }

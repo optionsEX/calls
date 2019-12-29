@@ -1,4 +1,4 @@
-pragma solidity ^0.5;
+pragma solidity >=0.5.0 <0.7.0;
 
 
 contract DSFProtocolTypes {
@@ -9,8 +9,10 @@ contract DSFProtocolTypes {
     }
 
     struct OptionSeries {
-        uint expiration;
-        Flavor flavor;
-        uint strike;
+      uint expiration;
+      Flavor flavor;
+      uint strike;
+      address underlying;
+      address strikeAsset;
     }
 }
