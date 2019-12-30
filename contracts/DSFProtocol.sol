@@ -211,11 +211,14 @@ contract DSFProtocol is DSFProtocolTypes {
         );
     }
 
+    event SeriesRedeemed(address series, uint eth, uint usd);
+
     function redeem(address _series) public returns (uint eth, uint usd) {
         OptionSeries memory series = seriesInfo[_series];
 
-        require(now > series.expiration + DURATION);
+        require(now > series.expiration, "Series did not expire");
 
+        //TODO refactor for ERC20 underlying and other strikeAssets
         (eth, usd) = calculateWriterSettlement(writers[_series][msg.sender], _series);
 
         if (eth > 0) {
@@ -226,6 +229,7 @@ contract DSFProtocol is DSFProtocolTypes {
             usdERC20.transfer(msg.sender, usd);
         }
 
+        emit SeriesRedeemed(_series, eth, usd);
         return (eth, usd);
     }
 

@@ -3,7 +3,7 @@ const protocol = require('Embark/contracts/DSFProtocol');
 const ERC20 = require('Embark/contracts/ERC20');
 const USDMock = require('Embark/contracts/USDMock');
 const moment = require('moment');
-const { toEth, createERC20Instance, fromWei, getBalance } = require('../utils/testUtils');
+const { toEth, createERC20Instance, fromWei, getBalance, increaseTime } = require('../utils/testUtils');
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 let expiration = moment().add(3, 'weeks');
@@ -12,7 +12,9 @@ const call = 0, put = 1;
 const strike100 = '100000000000000000000';
 const discount95 = '950000000000000000';
 const noDiscount = '1000000000000000000';
-
+const SECONDS_IN_DAY = 86400;
+const SECONDS_IN_YEAR = SECONDS_IN_DAY * 365.25;
+const getDiffSeconds = (now, future) => (future.unix() - now.unix());
 
 let accounts;
 
@@ -82,11 +84,24 @@ contract("DSFProtocol", function() {
       assert.strictEqual(Math.trunc(fromWei(newBalanceEth)) - Math.trunc(fromWei(ethBalance)), 1);
     })
 
-    it('writer closes option token', async () => {
+    it('writer closes not transfered balance on option token', async () => {
       const closed = await protocol.methods.close(optionToken._address, toEth('1')).send({from: accounts[0]})
       const balance = await optionToken.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, '0')
     })
+
+    it('writer redeems and receives monies owed from exercises', async () => {
+      const balanceUSD = await USDMock.methods.balanceOf(accounts[0]).call();
+      assert.strictEqual(fromWei(balanceUSD), 0);
+      const now = moment();
+      const future = moment(now).add(13, 'M');
+      const time = getDiffSeconds(now, future);
+      await increaseTime(Number(time));
+      const redeem = await protocol.methods.redeem(optionToken._address).send({from: accounts[0]});
+      const newBalanceUSD = await USDMock.methods.balanceOf(accounts[0]).call();
+      assert.strictEqual(fromWei(newBalanceUSD), 300);
+    })
+
   })
 
   describe("auction pricing", async () => {

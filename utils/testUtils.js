@@ -37,3 +37,26 @@ module.exports.increaseTime = async (amount) => {
     );
   });
 };
+
+module.exports.timeTravel = function(time) {
+  return new Promise((resolve, reject) => {
+    web3.currentProvider.send({
+      jsonrpc: "2.0",
+      method: "evm_increaseTime",
+      params: [time],
+      id: new Date().getTime()
+    }, (err, data) => {
+      if (err)
+        return reject(err)
+
+      web3.currentProvider.send({
+        jsonrpc: '2.0',
+        method: 'evm_mine',
+        params: [],
+        id: new Date().getSeconds()
+      }, () => {
+        resolve(data)
+      })
+    })
+  })
+};
