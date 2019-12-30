@@ -1,16 +1,17 @@
 /*global contract, it*/
 const protocol = require('Embark/contracts/DSFProtocol');
-const ERC20 = require('Embark/contracts/ERC20')
-const moment = require('moment')
-const { toEth, createERC20Instance } = require('../utils/testUtils')
+const ERC20 = require('Embark/contracts/ERC20');
+const USDMock = require('Embark/contracts/USDMock');
+const moment = require('moment');
+const { toEth, createERC20Instance, fromWei, getBalance } = require('../utils/testUtils');
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
-let expiration = moment().add(3, 'weeks')
-const strike = toEth('300')
-const call = 0, put = 1
-const strike100 = '100000000000000000000'
-const discount95 = '950000000000000000'
-const noDiscount = '1000000000000000000'
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+let expiration = moment().add(3, 'weeks');
+const strike = toEth('300');
+const call = 0, put = 1;
+const strike100 = '100000000000000000000';
+const discount95 = '950000000000000000';
+const noDiscount = '1000000000000000000';
 
 
 let accounts;
@@ -52,13 +53,36 @@ contract("DSFProtocol", function() {
       optionToken = createERC20Instance(OptionTokenCreated.returnValues.token)
     })
 
-    it('opens option token position', async () => {
-      const opened = await protocol.methods.open(optionToken._address, toEth('1')).send({from: accounts[0], value: toEth('1')})
+    it('opens option token position with ETH', async () => {
+      const opened = await protocol.methods.open(optionToken._address, toEth('2')).send({from: accounts[0], value: toEth('2')})
       const balance = await optionToken.methods.balanceOf(accounts[0]).call()
+      assert.strictEqual(balance, toEth('2'))
+    })
+
+    it('writer transfers part of balance to new account', async () => {
+      await optionToken.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0]})
+      const balance = await optionToken.methods.balanceOf(accounts[1]).call()
       assert.strictEqual(balance, toEth('1'))
     })
 
-    it('closes option token', async () => {
+    it('new account exercises option', async () => {
+      await USDMock.methods.mint(accounts[1], toEth('1000')).send({from: accounts[1]});
+      const series = await protocol.methods.seriesInfo(optionToken._address).call();
+      const { expiration, strike } = series;
+      const balance = await optionToken.methods.balanceOf(accounts[1]).call();
+      const ethBalance = await getBalance(accounts[1]);
+      const exerciseAmount = fromWei(balance) * fromWei(strike);
+      await USDMock.methods.approve(protocol._address, toEth(exerciseAmount.toString())).send({from: accounts[1]});
+      await protocol.methods.exercise(optionToken._address, toEth('1')).send({from: accounts[1]});
+      const newBalance = await optionToken.methods.balanceOf(accounts[1]).call();
+      const newBalanceUSD = await USDMock.methods.balanceOf(accounts[1]).call();
+      const newBalanceEth = await getBalance(accounts[1]);
+      assert.strictEqual(newBalance, '0', "Option token balance incorrectly updated");
+      assert.strictEqual(fromWei(newBalanceUSD), 700, "USD balance incorrectly updated");
+      assert.strictEqual(Math.trunc(fromWei(newBalanceEth)) - Math.trunc(fromWei(ethBalance)), 1);
+    })
+
+    it('writer closes option token', async () => {
       const closed = await protocol.methods.close(optionToken._address, toEth('1')).send({from: accounts[0]})
       const balance = await optionToken.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, '0')
