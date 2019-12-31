@@ -25,7 +25,6 @@ contract DSFProtocol is DSFProtocolTypes {
     mapping(address => mapping(address => uint)) public writers;
     mapping(address => OptionSeries) public seriesInfo;
     mapping(address => uint) public holdersSettlement;
-    mapping(address => uint) public expectValue;
     mapping(bytes32 => bool) public seriesExists;
     bool isAuction;
 
@@ -123,12 +122,6 @@ contract DSFProtocol is DSFProtocolTypes {
             require(msg.value == amount);
             usdERC20.transfer(msg.sender, usd);
         }
-    }
-
-    function receive() public payable returns (bool) {
-        require(expectValue[msg.sender] == msg.value);
-        expectValue[msg.sender] = 0;
-        return true;
     }
 
     event SeriesRedeemed(address series, uint eth, uint usd);
