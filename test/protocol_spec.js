@@ -103,34 +103,4 @@ contract("DSFProtocol", function() {
     })
 
   })
-
-  describe("auction pricing", async () => {
-
-    it('calculates put option price at t=0', async () => {
-      const elapsed = 0
-      const price = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, noDiscount).call()
-      assert.strictEqual(price, '0')
-      const dPrice = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, discount95).call()
-      assert.strictEqual(dPrice, '0')
-    })
-
-    it('calculates put option price at t=6h', async () => {
-      const elapsed = 6 * 3600
-
-      const price = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, noDiscount).call()
-      assert.strictEqual(price, '50000000000000000000')
-      const dPrice = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, discount95).call()
-      assert.strictEqual(dPrice, '52631578947368421052')
-    })
-
-    it('calculates put option price at t=12h', async () => {
-      const elapsed = 12 * 3600
-
-      const price = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, noDiscount).call()
-      assert.strictEqual(price, '100000000000000000000')
-      const dPrice = await protocol.methods.putAuctionUSDPrice(strike100, elapsed, discount95).call()
-      assert.strictEqual(dPrice, '100000000000000000000')
-    })
-
-  })
 })
