@@ -1,23 +1,18 @@
 pragma solidity >=0.5.0 <0.7.0;
 
-import "./ERC20.sol";
-import "./OptionToken.sol";
-import "./VariableSupplyToken.sol";
-import "./ProtocolTypes.sol";
-import "./BidderInterface.sol";
-
+import "./tokens/ERC20.sol";
+import "./tokens/OptionToken.sol";
+import "./tokens/VariableSupplyToken.sol";
+import "./lib/Types.sol";
 
 /// @author Brian Wheeler - (DSF Protocol)
-contract Protocol is ProtocolTypes {
+contract Protocol is Types {
 
     string public constant VERSION = "1.0";
     address public ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     ERC20 public usdERC20;
     ERC20 public protocolToken;
-
-    uint public constant DURATION = 12 hours;
-    uint public constant HALF_DURATION = DURATION / 2;
 
     mapping(address => uint) public openInterest;
     mapping(address => uint) public earlyExercised;
@@ -26,10 +21,6 @@ contract Protocol is ProtocolTypes {
     mapping(address => OptionSeries) public seriesInfo;
     mapping(address => uint) public holdersSettlement;
     mapping(bytes32 => bool) public seriesExists;
-    bool isAuction;
-
-
-    uint public constant PREFERENCE_MAX = 0.037 ether;
 
     constructor(address _token, address _usd) public {
         protocolToken = ERC20(_token);
@@ -169,7 +160,7 @@ contract Protocol is ProtocolTypes {
 
     function settle(address _series) public returns (uint usd) {
         OptionSeries memory series = seriesInfo[_series];
-        require(now > series.expiration + DURATION);
+        require(now > series.expiration);
 
         uint bal = ERC20(_series).balanceOf(msg.sender);
         VariableSupplyToken(_series).burn(msg.sender, bal);
