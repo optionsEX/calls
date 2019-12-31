@@ -193,23 +193,6 @@ contract Protocol is ProtocolTypes {
       );
     }
 
-    // map preference to a discount factor between 0.95 and 1
-    function discount(address from) public view returns (uint) {
-        return (100 ether - _unsLn(preference(from) * 139 + 1 ether)) / 100;
-    }
-
-    // map the quantity between 0 and 3.7% of DSF token supply the user owns
-    // to between 0 and 1
-    function preference(address from) public view returns (uint) {
-        uint percent = _min(
-            protocolToken.balanceOf(from) * 1 ether / protocolToken.totalSupply(),
-            PREFERENCE_MAX
-        );
-
-        uint normalized = percent * 1 ether / PREFERENCE_MAX;
-        return normalized;
-    }
-
     function _min(uint a, uint b) pure public returns (uint) {
         if (a > b)
             return b;
@@ -220,33 +203,5 @@ contract Protocol is ProtocolTypes {
         if (a > b)
             return a;
         return b;
-    }
-
-    function _unsLn(uint x) pure public returns (uint log) {
-        log = 0;
-
-        // not a true ln function, we can't represent the negatives
-        if (x < 1 ether)
-            return 0;
-
-        while (x >= 1.5 ether) {
-            log += 0.405465 ether;
-            x = x * 2 / 3;
-        }
-
-        x = x - 1 ether;
-        uint y = x;
-        uint i = 1;
-
-        while (i < 10) {
-            log += (y / i);
-            i = i + 1;
-            y = y * x / 1 ether;
-            log -= (y / i);
-            i = i + 1;
-            y = y * x / 1 ether;
-        }
-
-        return(log);
     }
 }
