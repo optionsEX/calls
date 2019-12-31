@@ -1,5 +1,5 @@
 /*global contract, it*/
-const protocol = require('Embark/contracts/DSFProtocol');
+const protocol = require('Embark/contracts/Protocol');
 const ERC20 = require('Embark/contracts/ERC20');
 const USDMock = require('Embark/contracts/USDMock');
 const moment = require('moment');
@@ -31,10 +31,10 @@ config({
   },
   contracts: {
     "USDMock": {},
-    "DSFTokenMock": {},
-    "DSFProtocol": {
+    "TokenMock": {},
+    "Protocol": {
       "args": [
-        "$DSFTokenMock",
+        "$TokenMock",
         "$USDMock"
       ]
     }
@@ -44,7 +44,7 @@ config({
 });
 
 
-contract("DSFProtocol", function() {
+contract("Protocol", function() {
   describe("option token", async() => {
     let optionToken
 

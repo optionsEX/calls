@@ -4,7 +4,7 @@ import "./VariableSupplyToken.sol";
 
 
 // we don't store much state here either
-contract DSFTokenMock is VariableSupplyToken {
+contract TokenMock is VariableSupplyToken {
     constructor() public {
         creator = msg.sender;
         name = "Decentralized Settlement Facility Token";

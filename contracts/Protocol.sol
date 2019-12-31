@@ -3,12 +3,12 @@ pragma solidity >=0.5.0 <0.7.0;
 import "./ERC20.sol";
 import "./OptionToken.sol";
 import "./VariableSupplyToken.sol";
-import "./DSFProtocolTypes.sol";
+import "./ProtocolTypes.sol";
 import "./BidderInterface.sol";
 
 
 /// @author Brian Wheeler - (DSF Protocol)
-contract DSFProtocol is DSFProtocolTypes {
+contract Protocol is ProtocolTypes {
 
     string public constant VERSION = "1.0";
     address public ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
