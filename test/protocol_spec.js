@@ -67,6 +67,18 @@ contract("Protocol", function() {
       assert.strictEqual(balance, toEth('1'))
     })
 
+    it('receiver attempts to close and transaction should revert', async () => {
+      let closed;
+      try {
+        closed = await protocol.methods.close(optionToken._address, toEth('1')).send({from: accounts[1]})
+      } catch(e) {
+        const reverted = e.message.includes('revert Caller did not write sufficient amount');
+        assert.strictEqual(reverted, true);
+      }
+      const balance = await optionToken.methods.balanceOf(accounts[1]).call();
+      assert.strictEqual(balance, toEth('1'));
+    })
+
     it('new account exercises option', async () => {
       await USDMock.methods.mint(accounts[1], toEth('1000')).send({from: accounts[1]});
       const series = await protocol.methods.seriesInfo(optionToken._address).call();

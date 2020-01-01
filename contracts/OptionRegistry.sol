@@ -42,7 +42,7 @@ contract OptionRegistry {
 
     function open(address _series, uint amount) public payable returns (bool) {
         Types.OptionSeries memory series = seriesInfo[_series];
-        require(now < series.expiration);
+        require(now < series.expiration, "Options can not be opened after expiration");
 
         if (series.flavor == Types.Flavor.Call) {
             require(msg.value == amount);
@@ -70,7 +70,7 @@ contract OptionRegistry {
         require(openInterest[_series] >= amount);
         VariableSupplyToken(_series).burn(msg.sender, amount);
 
-        require(writers[_series][msg.sender] >= amount);
+        require(writers[_series][msg.sender] >= amount, "Caller did not write sufficient amount");
         writers[_series][msg.sender] -= amount;
         openInterest[_series] -= amount;
         totalInterest[_series] -= amount;
