@@ -1,7 +1,7 @@
 pragma solidity >=0.5.0 <0.7.0;
 import "./ABDKMathQuad.sol";
 
-contract NormalDist {
+library NormalDist {
     using ABDKMathQuad for uint256;
     using ABDKMathQuad for bytes16;
     using ABDKMathQuad for int256;

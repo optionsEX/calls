@@ -34,7 +34,8 @@ config({
     ]
   },
   contracts: {
-    "BlackScholes": {}
+    "BlackScholes": {},
+    "NormalDist": {}
   }
 }, (_err, web3_accounts) => {
   accounts = web3_accounts;

@@ -1,9 +1,9 @@
 pragma solidity >=0.5.0 <0.7.0;
 import "./ABDKMathQuad.sol";
-import "./NormalDist.sol";
+import { NormalDist } from "./NormalDist.sol";
 import { Types } from "./Types.sol";
 
-contract BlackScholes is NormalDist {
+contract BlackScholes {
     using ABDKMathQuad for uint256;
     using ABDKMathQuad for bytes16;
     using ABDKMathQuad for int256;
@@ -49,8 +49,8 @@ contract BlackScholes is NormalDist {
       returns (bytes16)
     {
       bytes16 d2 = d1.sub(d1Denominator);
-      bytes16 cdfD1 = cdf(d1);
-      bytes16 cdfD2 = cdf(d2);
+      bytes16 cdfD1 = NormalDist.cdf(d1);
+      bytes16 cdfD2 = NormalDist.cdf(d2);
       bytes16 priceCdf = price.mul(cdfD1);
       bytes16 strikeBy = strike.mul(eToNegRT).mul(cdfD2);
       return priceCdf.sub(strikeBy);
@@ -68,8 +68,8 @@ contract BlackScholes is NormalDist {
       returns (bytes16)
     {
       bytes16 d2 = d1Denominator.sub(d1);
-      bytes16 cdfD1 = cdf(d1.neg());
-      bytes16 cdfD2 = cdf(d2);
+      bytes16 cdfD1 = NormalDist.cdf(d1.neg());
+      bytes16 cdfD2 = NormalDist.cdf(d2);
       bytes16 priceCdf = price.mul(cdfD1);
       bytes16 strikeBy = strike.mul(eToNegRT).mul(cdfD2);
       return strikeBy.sub(priceCdf);
