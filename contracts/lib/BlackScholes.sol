@@ -1,6 +1,7 @@
 pragma solidity >=0.5.0 <0.7.0;
 import "./ABDKMathQuad.sol";
 import "./NormalDist.sol";
+import { Types } from "./Types.sol";
 
 contract BlackScholes is NormalDist {
     using ABDKMathQuad for uint256;
@@ -13,11 +14,6 @@ contract BlackScholes is NormalDist {
     bytes16 private constant HUNDRED = 0x40059000000000000000000000000000;
     bytes16 private constant DECIMAL_PLACE = 0x403abc16d674ec800000000000000000;
     bytes16 ONE_YEAR_SECONDS = 0x4017e187e00000000000000000000000;
-
-    enum Flavor {
-        Call,
-        Put
-    }
 
     struct Intermediates {
       bytes16 d1Denominator;
@@ -95,7 +91,7 @@ contract BlackScholes is NormalDist {
         uint expiration,
         uint vol,
         uint rfr,
-        Flavor flavor
+        Types.Flavor flavor
     )
       public
       view
@@ -128,10 +124,10 @@ contract BlackScholes is NormalDist {
       bytes16 d1Numerator = d1Left.add(d1Right);
       bytes16 d1Denominator = vol.mul(time.sqrt());
       return Intermediates({
-            d1Denominator: d1Denominator,
-            d1: d1Numerator.div(d1Denominator),
-            eToNegRT: rfr.mul(time).neg().exp()
-        });
+         d1Denominator: d1Denominator,
+         d1: d1Numerator.div(d1Denominator),
+         eToNegRT: rfr.mul(time).neg().exp()
+      });
     }
 
     function blackScholesCalc(
@@ -140,14 +136,14 @@ contract BlackScholes is NormalDist {
          bytes16 time,
          bytes16 vol,
          bytes16 rfr,
-         Flavor flavor
+         Types.Flavor flavor
     )
       public
       pure
       returns (bytes16)
     {
       Intermediates memory i = getIntermediates(price, strike, time, vol, rfr);
-      if (flavor == Flavor.Call) {
+      if (flavor == Types.Flavor.Call) {
         return callOptionPrice(i.d1, i.d1Denominator, price, strike, i.eToNegRT);
       } else {
         return putOptionPrice(i.d1, i.d1Denominator, price, strike, i.eToNegRT);

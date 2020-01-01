@@ -3,10 +3,10 @@ pragma solidity >=0.5.0 <0.7.0;
 import "./tokens/ERC20.sol";
 import "./tokens/OptionToken.sol";
 import "./tokens/VariableSupplyToken.sol";
-import "./lib/Types.sol";
+import { Types } from "./lib/Types.sol";
 
 /// @author Brian Wheeler - (DSF Protocol)
-contract OptionRegistry is Types {
+contract OptionRegistry {
 
     string public constant VERSION = "1.0";
     address public ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
@@ -18,7 +18,7 @@ contract OptionRegistry is Types {
     mapping(address => uint) public earlyExercised;
     mapping(address => uint) public totalInterest;
     mapping(address => mapping(address => uint)) public writers;
-    mapping(address => OptionSeries) public seriesInfo;
+    mapping(address => Types.OptionSeries) public seriesInfo;
     mapping(address => uint) public holdersSettlement;
     mapping(bytes32 => bool) public seriesExists;
 
@@ -26,7 +26,7 @@ contract OptionRegistry is Types {
     event SeriesRedeemed(address series, uint eth, uint usd);
     // Note, this just creates an option token, it doesn't guarantee
     // settlement of that token. For guaranteed settlement see the DSFProtocolProxy contract(s)
-    function issue(address underlying, address strikeAsset, uint expiration, Flavor flavor, uint strike) public returns (address) {
+    function issue(address underlying, address strikeAsset, uint expiration, Types.Flavor flavor, uint strike) public returns (address) {
         require(expiration > now);
         require(strike > 1 ether);
         address u = underlying == address(0) ? ETH : underlying;
@@ -34,17 +34,17 @@ contract OptionRegistry is Types {
         bytes32 issuanceHash = getIssuanceHash(underlying, strikeAsset, expiration, flavor, strike);
         require(seriesExists[issuanceHash] == false, "Series already exists");
         address series = address(new OptionToken(issuanceHash));
-        seriesInfo[series] = OptionSeries(expiration, flavor, strike, u, s);
+        seriesInfo[series] = Types.OptionSeries(expiration, flavor, strike, u, s);
         seriesExists[issuanceHash] = true;
         emit OptionTokenCreated(series);
         return series;
     }
 
     function open(address _series, uint amount) public payable returns (bool) {
-        OptionSeries memory series = seriesInfo[_series];
+        Types.OptionSeries memory series = seriesInfo[_series];
         require(now < series.expiration);
 
-        if (series.flavor == Flavor.Call) {
+        if (series.flavor == Types.Flavor.Call) {
             require(msg.value == amount);
         } else {
             require(msg.value == 0);
@@ -64,7 +64,7 @@ contract OptionRegistry is Types {
     }
 
     function close(address _series, uint amount) public returns (bool) {
-        OptionSeries memory series = seriesInfo[_series];
+        Types.OptionSeries memory series = seriesInfo[_series];
 
         require(now < series.expiration);
         require(openInterest[_series] >= amount);
@@ -75,7 +75,7 @@ contract OptionRegistry is Types {
         openInterest[_series] -= amount;
         totalInterest[_series] -= amount;
 
-        if (series.flavor == Flavor.Call) {
+        if (series.flavor == Types.Flavor.Call) {
             msg.sender.transfer(amount);
         } else {
             usdERC20.transfer(msg.sender, amount * series.strike / 1 ether);
@@ -84,7 +84,7 @@ contract OptionRegistry is Types {
     }
 
     function exercise(address _series, uint amount) public payable {
-        OptionSeries memory series = seriesInfo[_series];
+        Types.OptionSeries memory series = seriesInfo[_series];
 
         require(now < series.expiration);
         require(openInterest[_series] >= amount);
@@ -97,7 +97,7 @@ contract OptionRegistry is Types {
         openInterest[_series] -= amount;
         earlyExercised[_series] += amount;
 
-        if (series.flavor == Flavor.Call) {
+        if (series.flavor == Types.Flavor.Call) {
             msg.sender.transfer(amount);
             require(msg.value == 0);
             usdERC20.transferFrom(msg.sender, address(this), usd);
@@ -109,7 +109,7 @@ contract OptionRegistry is Types {
 
 
     function redeem(address _series) public returns (uint eth, uint usd) {
-        OptionSeries memory series = seriesInfo[_series];
+        Types.OptionSeries memory series = seriesInfo[_series];
 
         require(now > series.expiration, "Series did not expire");
 
@@ -132,11 +132,11 @@ contract OptionRegistry is Types {
         uint written,
         address _series
     ) public view returns (uint eth, uint usd) {
-        OptionSeries memory series = seriesInfo[_series];
+        Types.OptionSeries memory series = seriesInfo[_series];
         uint unsettledPercent = openInterest[_series] * 1 ether / totalInterest[_series];
         uint exercisedPercent = (totalInterest[_series] - openInterest[_series]) * 1 ether / totalInterest[_series];
 
-        if (series.flavor == Flavor.Call) {
+        if (series.flavor == Types.Flavor.Call) {
             eth = written * unsettledPercent / 1 ether;
             usd = written * exercisedPercent / 1 ether;
             usd = usd * series.strike / 1 ether;
@@ -150,7 +150,7 @@ contract OptionRegistry is Types {
     }
 
     function settle(address _series) public returns (uint usd) {
-        OptionSeries memory series = seriesInfo[_series];
+        Types.OptionSeries memory series = seriesInfo[_series];
         require(now > series.expiration);
 
         uint bal = ERC20(_series).balanceOf(msg.sender);
@@ -165,7 +165,7 @@ contract OptionRegistry is Types {
     /**
      * Helper function for computing the hash of a given issuance.
      */
-    function getIssuanceHash(address underlying, address strikeAsset, uint expiration, Flavor flavor, uint strike)
+    function getIssuanceHash(address underlying, address strikeAsset, uint expiration, Types.Flavor flavor, uint strike)
       internal
       pure
       returns(bytes32)
