@@ -159,5 +159,11 @@ contract("Protocol", function() {
       assert.strictEqual((fromWei(usdBalance) - Number(exerciseAmount)), fromWei(newBalanceUSD), "Strike asset balance incorrectly updated");
       assert.strictEqual(fromWei(newBalanceToken), 1, "New Balance of underlying incorrectly updated");
     })
+
+    it('writer closes not transfered balance on ERC20 call option', async () => {
+      const closed = await protocol.methods.close(erc20CallOption._address, toEth('1')).send({from: accounts[0]})
+      const balance = await optionToken.methods.balanceOf(accounts[0]).call()
+      assert.strictEqual(balance, '0')
+    })
   })
 })

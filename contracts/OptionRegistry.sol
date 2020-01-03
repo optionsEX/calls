@@ -73,7 +73,7 @@ contract OptionRegistry {
         totalInterest[_series] -= amount;
 
         if (series.flavor == Types.Flavor.Call) {
-            msg.sender.transfer(amount);
+          closeCall(series, amount);
         } else {
             usdERC20.transfer(msg.sender, amount * series.strike / 1 ether);
         }
@@ -185,6 +185,14 @@ contract OptionRegistry {
       } else {
         require(ERC20(_series.underlying).transfer(msg.sender, amount), "Transfer to exerciser failed");
         require(ERC20(_series.strikeAsset).transferFrom(msg.sender, address(this), exerciseAmount),"Transfer from exerciser failed");
+      }
+    }
+
+    function closeCall(Types.OptionSeries memory _series, uint amount) internal {
+      if (_series.underlying == ETH) {
+        msg.sender.transfer(amount);
+      } else {
+        require(ERC20(_series.underlying).transfer(msg.sender, amount), "Transfer failed");
       }
     }
 
