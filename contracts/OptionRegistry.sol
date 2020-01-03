@@ -24,7 +24,7 @@ contract OptionRegistry {
     mapping(bytes32 => bool) public seriesExists;
 
     event OptionTokenCreated(address token);
-    event SeriesRedeemed(address series, uint eth, uint usd);
+    event SeriesRedeemed(address series, uint underlyingAmount, uint strikeAmount);
     // Note, this just creates an option token, it doesn't guarantee
     // settlement of that token. For guaranteed settlement see the DSFProtocolProxy contract(s)
     function issue(address underlying, address strikeAsset, uint expiration, Types.Flavor flavor, uint strike) public returns (address) {
@@ -73,7 +73,7 @@ contract OptionRegistry {
         totalInterest[_series] -= amount;
 
         if (series.flavor == Types.Flavor.Call) {
-          closeCall(series, amount);
+          transferOutUnderlying(series, amount);
         } else {
             usdERC20.transfer(msg.sender, amount * series.strike / 1 ether);
         }
@@ -103,44 +103,43 @@ contract OptionRegistry {
     }
 
 
-    function redeem(address _series) public returns (uint eth, uint usd) {
+    function redeem(address _series) public returns (uint underlying, uint strikeAsset) {
         Types.OptionSeries memory series = seriesInfo[_series];
 
         require(now > series.expiration, "Series did not expire");
 
-        //TODO refactor for ERC20 underlying and other strikeAssets
-        (eth, usd) = calculateWriterSettlement(writers[_series][msg.sender], _series);
+        (underlying, strikeAsset) = calculateWriterSettlement(writers[_series][msg.sender], _series);
 
-        if (eth > 0) {
-            msg.sender.transfer(eth);
+        if (underlying > 0) {
+          transferOutUnderlying(series, underlying);
         }
 
-        if (usd > 0) {
-            usdERC20.transfer(msg.sender, usd);
+        if (strikeAsset > 0) {
+          transferOutStrike(series, strikeAsset);
         }
 
-        emit SeriesRedeemed(_series, eth, usd);
-        return (eth, usd);
+        emit SeriesRedeemed(_series, underlying, strikeAsset);
+        return (underlying, strikeAsset);
     }
 
     function calculateWriterSettlement(
         uint written,
         address _series
-    ) public view returns (uint eth, uint usd) {
+    ) public view returns (uint underlying, uint strikeAsset) {
         Types.OptionSeries memory series = seriesInfo[_series];
         uint unsettledPercent = openInterest[_series] * 1 ether / totalInterest[_series];
         uint exercisedPercent = (totalInterest[_series] - openInterest[_series]) * 1 ether / totalInterest[_series];
 
         if (series.flavor == Types.Flavor.Call) {
-            eth = written * unsettledPercent / 1 ether;
-            usd = written * exercisedPercent / 1 ether;
-            usd = usd * series.strike / 1 ether;
-            return (eth, usd);
+            underlying = written * unsettledPercent / 1 ether;
+            strikeAsset = written * exercisedPercent / 1 ether;
+            strikeAsset = strikeAsset * series.strike / 1 ether;
+            return (underlying, strikeAsset);
         } else {
-            usd = written * unsettledPercent / 1 ether;
-            usd = usd * series.strike / 1 ether;
-            eth = written * exercisedPercent / 1 ether;
-            return (eth, usd);
+            strikeAsset = written * unsettledPercent / 1 ether;
+            strikeAsset = strikeAsset * series.strike / 1 ether;
+            underlying = written * exercisedPercent / 1 ether;
+            return (underlying, strikeAsset);
         }
     }
 
@@ -188,13 +187,21 @@ contract OptionRegistry {
       }
     }
 
-    function closeCall(Types.OptionSeries memory _series, uint amount) internal {
+   function transferOutUnderlying(Types.OptionSeries memory _series, uint amount) internal {
       if (_series.underlying == ETH) {
         msg.sender.transfer(amount);
       } else {
         require(ERC20(_series.underlying).transfer(msg.sender, amount), "Transfer failed");
       }
     }
+
+   function transferOutStrike(Types.OptionSeries memory _series, uint amount) internal {
+     if (_series.strikeAsset == ETH) {
+       msg.sender.transfer(amount);
+     } else {
+       require(ERC20(_series.strikeAsset).transfer(msg.sender, amount), "Transfer failed");
+     }
+   }
 
     /**
      * Helper function for computing the hash of a given issuance.
