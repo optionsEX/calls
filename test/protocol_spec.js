@@ -50,9 +50,12 @@ config({
 
 contract("Protocol", function() {
   describe("option token", async() => {
+    let currentTime;
     let optionToken;
     let erc20CallOption;
     let erc20CallExpiration;
+    let putOption;
+    let putOptionExpiration;
 
     it('creates an option token series', async () => {
       const issue = await protocol.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), call, strike).send({from: accounts[0]})
@@ -115,6 +118,7 @@ contract("Protocol", function() {
       const future = moment(now).add(13, 'M');
       const time = getDiffSeconds(now, future);
       await increaseTime(Number(time));
+      currentTime = future;
       const redeem = await protocol.methods.redeem(optionToken._address).send({from: accounts[0]});
       const newBalanceUSD = await USDMock.methods.balanceOf(accounts[0]).call();
       assert.strictEqual(fromWei(newBalanceUSD), 300);
@@ -174,12 +178,32 @@ contract("Protocol", function() {
       const future = moment(erc20CallExpiration).add(1, 'M');
       const time = getDiffSeconds(moment(), future);
       await increaseTime(Number(time));
+      currentTime = future;
       const redeem = await protocol.methods.redeem(erc20CallOption._address).send({from: accounts[0]});
       const newBalanceUSD = await USDMock.methods.balanceOf(accounts[0]).call();
       const { underlyingAmount, strikeAmount } = redeem.events.SeriesRedeemed.returnValues;
       assert.strictEqual(underlyingAmount, '0');
       assert.strictEqual(fromWei(strikeAmount), 300);
       assert.strictEqual(fromWei(newBalanceUSD), 600);
+    })
+
+    it('creates a put option token series', async () => {
+      let expiration = currentTime.add(24, 'M');
+      putOptionExpiration = expiration;
+      const issue = await protocol.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), put, strike).send({from: accounts[0]})
+      const { events: { OptionTokenCreated } } = issue
+      assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated')
+      putOption = createERC20Instance(OptionTokenCreated.returnValues.token)
+    })
+
+    it('opens put option token position with ETH', async () => {
+      const balanceUSD = await USDMock.methods.balanceOf(accounts[0]).call();
+      // amount is amount X strike;
+      const amount = 2 * 300;
+      await USDMock.methods.approve(protocol._address, toEth(amount)).send({from: accounts[0]});
+      const opened = await protocol.methods.open(putOption._address, toEth('2')).send({from: accounts[0]})
+      const balance = await putOption.methods.balanceOf(accounts[0]).call();
+      assert.strictEqual(balance, toEth('2'))
     })
 
   })

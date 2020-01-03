@@ -163,16 +163,16 @@ contract OptionRegistry {
 
     function openPut(address strikeAsset, uint amount, uint strike) internal {
       if (strikeAsset != ETH) {
-        require(msg.value == 0);
+        require(msg.value == 0, "msg.value is not zero");
         uint escrow = amount * strike;
-        require(escrow / amount == strike);
+        require(escrow / amount == strike, "escrow does not balance");
         escrow /= 1 ether;
         require(ERC20(strikeAsset).transferFrom(msg.sender, address(this), escrow), "Failed to transfer in");
       } else {
         uint escrow = amount * strike;
-        require(escrow / amount == strike);
+        require(escrow / amount == strike, "escrow does not balance");
         escrow /= 1 ether;
-        require(msg.value == escrow);
+        require(msg.value == escrow, "msg.value does not match escrow");
       }
     }
 
