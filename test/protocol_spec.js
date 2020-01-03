@@ -2,6 +2,7 @@
 const protocol = require('Embark/contracts/Protocol');
 const ERC20 = require('Embark/contracts/ERC20');
 const USDMock = require('Embark/contracts/USDMock');
+const NewToken = require('Embark/contracts/NewToken');
 const moment = require('moment');
 const { toEth, createERC20Instance, fromWei, getBalance, increaseTime } = require('../utils/testUtils');
 
@@ -32,6 +33,9 @@ config({
   contracts: {
     "USDMock": {},
     "TokenMock": {},
+    "NewToken": {
+       instanceOf: "USDMock",
+    },
     "Protocol": {
       "args": [
         "$TokenMock",
@@ -46,7 +50,8 @@ config({
 
 contract("Protocol", function() {
   describe("option token", async() => {
-    let optionToken
+    let optionToken;
+    let erc20CallOption;
 
     it('creates an option token series', async () => {
       const issue = await protocol.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), call, strike).send({from: accounts[0]})
@@ -114,5 +119,45 @@ contract("Protocol", function() {
       assert.strictEqual(fromWei(newBalanceUSD), 300);
     })
 
+    it('creates an ERC20 call option token series', async () => {
+      const now = moment();
+      const future = moment(now).add(14, 'M');
+      await NewToken.methods.mint(accounts[0], toEth('1000')).send({from: accounts[0]});
+      const issue = await protocol.methods.issue(NewToken._address, USDMock._address, future.unix(), call, strike).send({from: accounts[0]})
+      const { events: { OptionTokenCreated } } = issue
+      assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated')
+      erc20CallOption = createERC20Instance(OptionTokenCreated.returnValues.token)
+    })
+
+    it('opens an ERC20 call option', async () => {
+      await NewToken.methods.approve(protocol._address, toEth(toEth('2'))).send({from: accounts[0]});
+      const issue = await protocol.methods.open(erc20CallOption._address, toEth('2')).send({from: accounts[0]})
+      const balance = await erc20CallOption.methods.balanceOf(accounts[0]).call();
+      assert.strictEqual(balance, toEth('2'));
+    })
+
+    it('writer transfers part of erc20 call balance to new account', async () => {
+      await erc20CallOption.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0]})
+      const balance = await erc20CallOption.methods.balanceOf(accounts[1]).call()
+      assert.strictEqual(balance, toEth('1'))
+    })
+
+    it('new account exercises erc20 call option', async () => {
+      await USDMock.methods.mint(accounts[1], toEth('1000')).send({from: accounts[1]});
+      const usdBalance = await USDMock.methods.balanceOf(accounts[1]).call();
+      const oldBalanceToken = await NewToken.methods.balanceOf(accounts[1]).call();
+      const series = await protocol.methods.seriesInfo(erc20CallOption._address).call();
+      const { expiration, strike } = series;
+      const balance = await erc20CallOption.methods.balanceOf(accounts[1]).call();
+      const exerciseAmount = fromWei(balance) * fromWei(strike);
+      await USDMock.methods.approve(protocol._address, toEth(exerciseAmount.toString())).send({from: accounts[1]});
+      await protocol.methods.exercise(erc20CallOption._address, toEth('1')).send({from: accounts[1]});
+      const newBalance = await erc20CallOption.methods.balanceOf(accounts[1]).call();
+      const newBalanceUSD = await USDMock.methods.balanceOf(accounts[1]).call();
+      const newBalanceToken = await NewToken.methods.balanceOf(accounts[1]).call();
+      assert.strictEqual(newBalance, '0', "Option token balance incorrectly updated");
+      assert.strictEqual((fromWei(usdBalance) - Number(exerciseAmount)), fromWei(newBalanceUSD), "Strike asset balance incorrectly updated");
+      assert.strictEqual(fromWei(newBalanceToken), 1, "New Balance of underlying incorrectly updated");
+    })
   })
 })

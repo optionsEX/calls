@@ -1,4 +1,5 @@
 pragma solidity >=0.5.0 <0.7.0;
+pragma experimental ABIEncoderV2;
 
 import "./tokens/ERC20.sol";
 import "./tokens/OptionToken.sol";
@@ -27,8 +28,8 @@ contract OptionRegistry {
     // Note, this just creates an option token, it doesn't guarantee
     // settlement of that token. For guaranteed settlement see the DSFProtocolProxy contract(s)
     function issue(address underlying, address strikeAsset, uint expiration, Types.Flavor flavor, uint strike) public returns (address) {
-        require(expiration > now);
-        require(strike > 1 ether);
+        require(expiration > now, "Already expired");
+        require(strike > 1 ether, "Strike is not greater than 1");
         address u = underlying == address(0) ? ETH : underlying;
         address s = strikeAsset == address(0) ? address(usdERC20) : strikeAsset;
         bytes32 issuanceHash = getIssuanceHash(underlying, strikeAsset, expiration, flavor, strike);
@@ -45,13 +46,9 @@ contract OptionRegistry {
         require(now < series.expiration, "Options can not be opened after expiration");
 
         if (series.flavor == Types.Flavor.Call) {
-            require(msg.value == amount);
+          openCall(series.underlying, amount);
         } else {
-            require(msg.value == 0);
-            uint escrow = amount * series.strike;
-            require(escrow / amount == series.strike);
-            escrow /= 1 ether;
-            require(usdERC20.transferFrom(msg.sender, address(this), escrow));
+          openPut(series.strikeAsset, amount, series.strike);
         }
 
         VariableSupplyToken(_series).grant(msg.sender, amount);
@@ -86,24 +83,22 @@ contract OptionRegistry {
     function exercise(address _series, uint amount) public payable {
         Types.OptionSeries memory series = seriesInfo[_series];
 
-        require(now < series.expiration);
-        require(openInterest[_series] >= amount);
+        require(now < series.expiration, "Series already expired");
+        require(openInterest[_series] >= amount, " Amount greater than open interest");
         VariableSupplyToken(_series).burn(msg.sender, amount);
 
-        uint usd = amount * series.strike;
-        require(usd / amount == series.strike);
-        usd /= 1 ether;
+        uint exerciseAmount = amount * series.strike;
+        require(exerciseAmount / amount == series.strike, "Exercise amount does not balance");
+        exerciseAmount /= 1 ether;
 
         openInterest[_series] -= amount;
         earlyExercised[_series] += amount;
 
         if (series.flavor == Types.Flavor.Call) {
-            msg.sender.transfer(amount);
-            require(msg.value == 0);
-            usdERC20.transferFrom(msg.sender, address(this), usd);
+          exerciseCall(series, amount, exerciseAmount);
         } else {
             require(msg.value == amount);
-            usdERC20.transfer(msg.sender, usd);
+            usdERC20.transfer(msg.sender, exerciseAmount);
         }
     }
 
@@ -160,6 +155,37 @@ contract OptionRegistry {
         usd = holdersSettlement[_series] * percent / 1 ether;
         usdERC20.transfer(msg.sender, usd);
         return usd;
+    }
+
+    function openCall(address underlying, uint amount) internal {
+      if(underlying == ETH) require(msg.value == amount);
+      else require(ERC20(underlying).transferFrom(msg.sender, address(this), amount), "ER20 transfer in failed");
+    }
+
+    function openPut(address strikeAsset, uint amount, uint strike) internal {
+      if (strikeAsset != ETH) {
+        require(msg.value == 0);
+        uint escrow = amount * strike;
+        require(escrow / amount == strike);
+        escrow /= 1 ether;
+        require(ERC20(strikeAsset).transferFrom(msg.sender, address(this), escrow), "Failed to transfer in");
+      } else {
+        uint escrow = amount * strike;
+        require(escrow / amount == strike);
+        escrow /= 1 ether;
+        require(msg.value == escrow);
+      }
+    }
+
+    function exerciseCall(Types.OptionSeries memory _series, uint amount, uint exerciseAmount) internal {
+      if (_series.underlying == ETH) {
+        msg.sender.transfer(amount);
+        require(msg.value == 0);
+        ERC20(_series.strikeAsset).transferFrom(msg.sender, address(this), exerciseAmount);
+      } else {
+        require(ERC20(_series.underlying).transfer(msg.sender, amount), "Transfer to exerciser failed");
+        require(ERC20(_series.strikeAsset).transferFrom(msg.sender, address(this), exerciseAmount),"Transfer from exerciser failed");
+      }
     }
 
     /**
