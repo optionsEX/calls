@@ -206,5 +206,29 @@ contract("Protocol", function() {
       assert.strictEqual(balance, toEth('2'))
     })
 
+    it('writer transfers part of put balance to new account', async () => {
+      await putOption.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0]})
+      const balance = await putOption.methods.balanceOf(accounts[1]).call()
+      assert.strictEqual(balance, toEth('1'))
+    })
+
+    it('new account exercises put option', async () => {
+      await USDMock.methods.mint(accounts[1], toEth('1000')).send({from: accounts[1]});
+      const originalBalanceUSD = await USDMock.methods.balanceOf(accounts[1]).call();
+      const series = await protocol.methods.seriesInfo(putOption._address).call();
+      const { expiration, strike } = series;
+      const balance = await putOption.methods.balanceOf(accounts[1]).call();
+      const ethBalance = await getBalance(accounts[1]);
+      const exerciseAmount = fromWei(balance) * fromWei(strike);
+      await protocol.methods.exercise(putOption._address, balance).send({from: accounts[1], value: toEth('1')});
+      const newBalance = await putOption.methods.balanceOf(accounts[1]).call();
+      const newBalanceUSD = await USDMock.methods.balanceOf(accounts[1]).call();
+      const newBalanceEth = await getBalance(accounts[1]);
+      const expectedUSDBalance = fromWei(originalBalanceUSD) + exerciseAmount
+      assert.strictEqual(newBalance, '0', "Option token balance incorrectly updated");
+      assert.strictEqual(fromWei(newBalanceUSD), expectedUSDBalance, "USD balance incorrectly updated");
+      assert.strictEqual(Math.trunc(fromWei(ethBalance) - Math.trunc(fromWei(newBalanceEth))), 1);
+    })
+
   })
 })
