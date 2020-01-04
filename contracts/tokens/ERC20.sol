@@ -12,7 +12,7 @@ contract ERC20 is ERC20Variables {
 
     function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
         uint256 allowance = allowed[_from][msg.sender];
-        require(allowance >= _value);
+        require(allowance >= _value, "Allowance is less than value");
         _transferBalance(_from, _to, _value);
         if (allowance < MAX_UINT256) {
             allowed[_from][msg.sender] -= _value;
@@ -37,7 +37,7 @@ contract ERC20 is ERC20Variables {
     }
 
     function _transferBalance(address _from, address _to, uint _value) internal {
-        require(balances[_from] >= _value);
+        require(balances[_from] >= _value, "Insufficient balance for transfer");
         balances[_from] -= _value;
         balances[_to] += _value;
     }

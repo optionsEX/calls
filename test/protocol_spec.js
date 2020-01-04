@@ -56,6 +56,8 @@ contract("Protocol", function() {
     let erc20CallExpiration;
     let putOption;
     let putOptionExpiration;
+    let erc20PutOption;
+    let erc20PutOptionExpiration;
 
     it('creates an option token series', async () => {
       const issue = await protocol.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), call, strike).send({from: accounts[0]})
@@ -64,7 +66,7 @@ contract("Protocol", function() {
       optionToken = createERC20Instance(OptionTokenCreated.returnValues.token)
     })
 
-    it('opens option token position with ETH', async () => {
+    it('opens option token with ETH', async () => {
       const opened = await protocol.methods.open(optionToken._address, toEth('2')).send({from: accounts[0], value: toEth('2')})
       const balance = await optionToken.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, toEth('2'))
@@ -228,6 +230,57 @@ contract("Protocol", function() {
       assert.strictEqual(newBalance, '0', "Option token balance incorrectly updated");
       assert.strictEqual(fromWei(newBalanceUSD), expectedUSDBalance, "USD balance incorrectly updated");
       assert.strictEqual(Math.trunc(fromWei(ethBalance) - Math.trunc(fromWei(newBalanceEth))), 1);
+    })
+
+    it('writer closes not transfered balance on put option token', async () => {
+      const closed = await protocol.methods.close(putOption._address, toEth('1')).send({from: accounts[0]})
+      const balance = await putOption.methods.balanceOf(accounts[0]).call()
+      assert.strictEqual(balance, '0')
+    })
+
+    it('creates an ERC20 put option token series', async () => {
+      const now = currentTime;
+      const future = moment(now).add(14, 'M');
+      erc20PutOptionExpiration = future;
+      const issue = await protocol.methods.issue(NewToken._address, USDMock._address, future.unix(), put, strike).send({from: accounts[0]})
+      const { events: { OptionTokenCreated } } = issue
+      assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated')
+      erc20PutOption = createERC20Instance(OptionTokenCreated.returnValues.token)
+    })
+
+    it('opens an ERC20 put option', async () => {
+      // amount * strike
+      const escrow = 2 * 300;
+      const escrowWei = toEth(escrow.toString())
+      await USDMock.methods.mint(accounts[0], toEth('1000')).send({from: accounts[0]});
+      const balanceToken = await USDMock.methods.balanceOf(accounts[0]).call();
+      await USDMock.methods.approve(protocol._address, escrowWei).send({from: accounts[0]});
+      const opened = await protocol.methods.open(erc20PutOption._address, toEth('2')).send({from: accounts[0]})
+      const balance = await erc20PutOption.methods.balanceOf(accounts[0]).call()
+      assert.strictEqual(balance, toEth('2'))
+    })
+
+    it('writer transfers part of erc20 put balance to new account', async () => {
+      await erc20PutOption.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0]});
+      const balance = await erc20PutOption.methods.balanceOf(accounts[1]).call();
+      assert.strictEqual(balance, toEth('1'));
+    })
+
+    it('new account exercises erc20 put option', async () => {
+      const balance = await erc20PutOption.methods.balanceOf(accounts[1]).call();
+      const strikeBalance = await USDMock.methods.balanceOf(accounts[1]).call();
+      const underlyingBalance = await NewToken.methods.balanceOf(accounts[1]).call();
+      const series = await protocol.methods.seriesInfo(erc20PutOption._address).call();
+      const { strike } = series;
+      await NewToken.methods.approve(protocol._address, balance).send({from: accounts[1]});
+      await protocol.methods.exercise(erc20PutOption._address, balance).send({from: accounts[1]});
+      const newUnderlyingBalance = await NewToken.methods.balanceOf(accounts[1]).call();
+    })
+
+    it('writer closes not transfered balance on erc20 put option', async () => {
+      const closed = await protocol.methods.close(erc20PutOption._address, toEth('1')).send({from: accounts[0]})
+      const balance = await erc20PutOption.methods.balanceOf(accounts[0]).call()
+      assert.strictEqual(balance, '0')
     })
 
   })
