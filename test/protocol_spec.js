@@ -49,8 +49,8 @@ config({
 
 
 contract("Protocol", function() {
+  let currentTime;
   describe("option token", async() => {
-    let currentTime;
     let optionToken;
     let erc20CallOption;
     let erc20CallExpiration;
@@ -282,6 +282,29 @@ contract("Protocol", function() {
       const balance = await erc20PutOption.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, '0')
     })
-
   })
+
+  describe("Exchange", async () => {
+    let optionToken;
+    let optionTokenExpiration;
+
+    it('Creates an eth call option and deposits it on the exchange', async () => {
+      optionTokenExpiration = moment(currentTime).add('12', 'M');
+      const issue = await protocol.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, optionTokenExpiration.unix(), call, strike).send({from: accounts[0]});
+      const { events: { OptionTokenCreated } } = issue;
+      assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated');
+      optionToken = createERC20Instance(OptionTokenCreated.returnValues.token);
+      const opened = await protocol.methods.open(optionToken._address, toEth('2')).send({from: accounts[0], value: toEth('2')});
+      const balance = await optionToken.methods.balanceOf(accounts[0]).call();
+      assert.strictEqual(balance, toEth('2'));
+      await optionToken.methods.approve(protocol._address, balance).send({from: accounts[0]});
+      const deposit = await protocol.methods.depositToken(optionToken._address, balance).send({from: accounts[0]});
+      const { returnValues: { balance: bal }, event } = deposit.events.Deposit;
+      assert.strictEqual(bal, balance);
+      assert.strictEqual(event, 'Deposit');
+    });
+
+    //TODO create limit order
+  })
+  //TODO test option writing pool
 })
