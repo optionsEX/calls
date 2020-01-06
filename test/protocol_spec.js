@@ -304,7 +304,40 @@ contract("Protocol", function() {
       assert.strictEqual(event, 'Deposit');
     });
 
-    //TODO create limit order
+    it('Creates a limit order to the sell the eth call', async () => {
+      const order = await protocol.methods.createOrder(
+        USDMock._address,
+        toEth('50'),
+        optionToken._address,
+        toEth('2'),
+        optionTokenExpiration.unix(),
+        '1'
+      ).send({from: accounts[0]});
+      const { event } = order.events.Order
+      assert.strictEqual(event, 'Order')
+    })
+
+    it('Buys the options from a holder of strike token', async () => {
+      const usdBalance = await USDMock.methods.balanceOf(accounts[1]).call();
+      await USDMock.methods.approve(protocol._address, toEth('26')).send({from: accounts[1]});
+      const deposit = await protocol.methods.depositToken(USDMock._address, toEth('26')).send({from: accounts[1]});
+      const trade = await protocol.methods.trade(
+        USDMock._address,
+        toEth('50'),
+        optionToken._address,
+        toEth('2'),
+        optionTokenExpiration.unix(),
+        '1',
+        accounts[0],
+        toEth('25')
+      ).send({from: accounts[1]});
+      const optionBalance = await protocol.methods.balanceOf(optionToken._address, accounts[1]).call();
+      const { events: Trade } = trade;
+      assert.strictEqual(optionBalance, toEth('1'));
+      assert.strictEqual(Trade.Trade.event, 'Trade');
+    })
+
+    // TODO withdraw funds from exchange
   })
   //TODO test option writing pool
 })
