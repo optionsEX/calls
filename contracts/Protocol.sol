@@ -9,8 +9,8 @@ contract Protocol is
 {
 
   constructor(address _token, address _usd) public {
-    protocolToken = ERC20(_token);
-    usdERC20 = ERC20(_usd);
+    protocolToken = IERC20(_token);
+    usdERC20 = IERC20(_usd);
   }
 
   function() external payable {

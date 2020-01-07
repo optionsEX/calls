@@ -2,10 +2,12 @@ pragma solidity >=0.5.0 <0.7.0;
 
 import "./interfaces/IERC20.sol";
 import "./lib/SafeMath.sol";
+import "./tokens/SafeERC20.sol";
 
 contract Exchange {
 
   using SafeMath for uint;
+  using SafeERC20 for IERC20;
 
   bool private depositingTokenFlag; // True when Token.transferFrom is being called from depositToken
   address public feeAccount = address(this); // the account that will receive fees
@@ -18,6 +20,7 @@ contract Exchange {
   event Order(address tokenGet, uint amountGet, address tokenGive, uint amountGive, uint expires, uint nonce, address user);
   event Deposit(address token, address user, uint amount, uint balance);
   event Trade(address tokenGet, uint amountGet, address tokenGive, uint amountGive, address get, address give);
+  event Withdraw(address token, address user, uint amount, uint balance);
 
   /**
    * This function handles deposits of ERC20 based tokens to the contract.
@@ -32,10 +35,26 @@ contract Exchange {
   function depositToken(address token, uint amount) public {
     require(token != address(0));
     depositingTokenFlag = true;
-    require(IERC20(token).transferFrom(msg.sender, address(this), amount));
+    IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
     depositingTokenFlag = false;
     tokens[token][msg.sender] = tokens[token][msg.sender].add(amount);
     emit Deposit(token, msg.sender, amount, tokens[token][msg.sender]);
+  }
+
+  /**
+   * This function handles withdrawals of ERC20 based tokens from the contract.
+   * Does not allow Ether.
+   * If token transfer fails, transaction is reverted and remaining gas is refunded.
+   * Emits a Withdraw event.
+   * @param token Ethereum contract address of the token or 0 for Ether
+   * @param amount uint of the amount of the token the user wishes to withdraw
+   */
+  function withdrawToken(address token, uint amount) public {
+    require(token != address(0));
+    require(tokens[token][msg.sender] >= amount);
+    tokens[token][msg.sender] = tokens[token][msg.sender].sub(amount);
+    IERC20(token).safeTransfer(msg.sender, amount);
+    emit Withdraw(token, msg.sender, amount, tokens[token][msg.sender]);
   }
 
   /**

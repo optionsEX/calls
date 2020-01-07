@@ -337,6 +337,17 @@ contract("Protocol", function() {
       assert.strictEqual(Trade.Trade.event, 'Trade');
     })
 
+    it('Buyer of option should be able to withdraw from exchange', async () => {
+      const balanceStart = await optionToken.methods.balanceOf(accounts[1]).call();
+      assert.strictEqual(balanceStart, '0');
+      const withdraw = await protocol.methods.withdrawToken(
+        optionToken._address,
+        toEth('1')
+      ).send({from: accounts[1]});
+      const balance = await optionToken.methods.balanceOf(accounts[1]).call();
+      assert.strictEqual(balance, toEth('1'));
+    })
+
     // TODO withdraw funds from exchange
   })
   //TODO test option writing pool
