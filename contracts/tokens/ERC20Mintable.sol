@@ -1,7 +1,6 @@
 pragma solidity >=0.5.0 <0.7.0;
 
 import "./ERC20.sol";
-import "../ownership/Ownable.sol";
 
 /**
  * @dev Extension of {ERC20} that adds a set of accounts with the {MinterRole},
@@ -9,7 +8,7 @@ import "../ownership/Ownable.sol";
  *
  * At construction, the deployer of the contract is the only minter.
  */
-contract ERC20Mintable is ERC20, Ownable {
+contract ERC20Mintable is ERC20 {
   /**
    * @dev See {ERC20-_mint}.
    *

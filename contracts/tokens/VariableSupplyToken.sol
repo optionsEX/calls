@@ -1,10 +1,8 @@
 pragma solidity ^0.5;
 
 import "./ERC20.sol";
-import "../ownership/Ownable.sol";
 
-
-contract VariableSupplyToken is ERC20, Ownable {
+contract VariableSupplyToken is ERC20 {
 
     /* function grant(address to, uint256 amount) public onlyOwner returns (bool) { */
     /*   //require(msg.sender == creator); */
