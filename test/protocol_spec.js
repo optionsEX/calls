@@ -31,6 +31,7 @@ config({
     ]
   },
   contracts: {
+    "Constants": {},
     "USDMock": {},
     "TokenMock": {},
     "NewToken": {

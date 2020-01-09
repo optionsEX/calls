@@ -1,17 +1,19 @@
-pragma solidity ^0.5;
+pragma solidity >=0.5.0 <0.7.0;
 
-import "./VariableSupplyToken.sol";
-
+import "./ERC20Mintable.sol";
+import "./ERC20Burnable.sol";
+import "./ERC20Detailed.sol";
+import "./ERC20.sol";
 
 // we don't store much state here either
-contract TokenMock is VariableSupplyToken {
+contract TokenMock is
+  ERC20,
+  ERC20Mintable,
+  ERC20Burnable,
+  ERC20Detailed
+{
     constructor() public {
-        creator = msg.sender;
-        name = "Decentralized Settlement Facility Token";
-        symbol = "DSF";
-
-        // this needs to be here to avoid zero initialization of token rights.
-        totalSupply = 100 ether;
-        balances[msg.sender] = 100 ether;
+      // this needs to be here to avoid zero initialization of token rights.
+      _mint(msg.sender, 100 ether);
     }
 }

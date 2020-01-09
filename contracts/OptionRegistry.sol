@@ -3,16 +3,15 @@ pragma experimental ABIEncoderV2;
 
 import "./interfaces/IERC20.sol";
 import "./tokens/OptionToken.sol";
-import "./tokens/VariableSupplyToken.sol";
 import "./tokens/SafeERC20.sol";
 import { Types } from "./lib/Types.sol";
+import { Constants } from "./lib/Constants.sol";
 
 /// @author Brian Wheeler - (DSF Protocol)
 contract OptionRegistry {
 
     using SafeERC20 for IERC20;
     string public constant VERSION = "1.0";
-    address public ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     IERC20 public usdERC20;
     IERC20 public protocolToken;
@@ -32,7 +31,7 @@ contract OptionRegistry {
     function issue(address underlying, address strikeAsset, uint expiration, Types.Flavor flavor, uint strike) public returns (address) {
         require(expiration > now, "Already expired");
         require(strike > 1 ether, "Strike is not greater than 1");
-        address u = underlying == address(0) ? ETH : underlying;
+        address u = underlying == address(0) ? Constants.ethAddress() : underlying;
         address s = strikeAsset == address(0) ? address(usdERC20) : strikeAsset;
         bytes32 issuanceHash = getIssuanceHash(underlying, strikeAsset, expiration, flavor, strike);
         require(seriesExists[issuanceHash] == false, "Series already exists");
@@ -53,7 +52,7 @@ contract OptionRegistry {
           openPut(series.strikeAsset, amount, series.strike);
         }
 
-        VariableSupplyToken(_series).grant(msg.sender, amount);
+        OptionToken(_series).mint(msg.sender, amount);
 
         openInterest[_series] += amount;
         totalInterest[_series] += amount;
@@ -67,7 +66,7 @@ contract OptionRegistry {
 
         require(now < series.expiration);
         require(openInterest[_series] >= amount);
-        VariableSupplyToken(_series).burn(msg.sender, amount);
+        OptionToken(_series).burnFrom(msg.sender, amount);
 
         require(writers[_series][msg.sender] >= amount, "Caller did not write sufficient amount");
         writers[_series][msg.sender] -= amount;
@@ -77,7 +76,7 @@ contract OptionRegistry {
         if (series.flavor == Types.Flavor.Call) {
           transferOutUnderlying(series, amount);
         } else {
-            usdERC20.safeTransfer(msg.sender, amount * series.strike / 1 ether);
+          usdERC20.safeTransfer(msg.sender, amount * series.strike / 1 ether);
         }
         return true;
     }
@@ -87,7 +86,7 @@ contract OptionRegistry {
 
         require(now < series.expiration, "Series already expired");
         require(openInterest[_series] >= amount, " Amount greater than open interest");
-        VariableSupplyToken(_series).burn(msg.sender, amount);
+        OptionToken(_series).burnFrom(msg.sender, amount);
 
         uint exerciseAmount = amount * series.strike;
         require(exerciseAmount / amount == series.strike, "Exercise amount does not balance");
@@ -149,7 +148,7 @@ contract OptionRegistry {
         require(now > series.expiration);
 
         uint bal = IERC20(_series).balanceOf(msg.sender);
-        VariableSupplyToken(_series).burn(msg.sender, bal);
+        OptionToken(_series).burnFrom(msg.sender, bal);
 
         uint percent = bal * 1 ether / (totalInterest[_series] - earlyExercised[_series]);
         usd = holdersSettlement[_series] * percent / 1 ether;
@@ -158,12 +157,12 @@ contract OptionRegistry {
     }
 
     function openCall(address underlying, uint amount) internal {
-      if(underlying == ETH) require(msg.value == amount);
+      if(underlying == Constants.ethAddress()) require(msg.value == amount);
       else IERC20(underlying).safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function openPut(address strikeAsset, uint amount, uint strike) internal {
-      if (strikeAsset != ETH) {
+      if (strikeAsset != Constants.ethAddress()) {
         require(msg.value == 0, "msg.value is not zero");
         uint escrow = amount * strike;
         require(escrow / amount == strike, "escrow does not balance");
@@ -178,7 +177,7 @@ contract OptionRegistry {
     }
 
     function exerciseCall(Types.OptionSeries memory _series, uint amount, uint exerciseAmount) internal {
-      if (_series.underlying == ETH) {
+      if (_series.underlying == Constants.ethAddress()) {
         msg.sender.transfer(amount);
         require(msg.value == 0);
         IERC20(_series.strikeAsset).safeTransferFrom(msg.sender, address(this), exerciseAmount);
@@ -189,7 +188,7 @@ contract OptionRegistry {
     }
 
     function exercisePut(Types.OptionSeries memory _series, uint amount, uint exerciseAmount) internal {
-      if (_series.underlying == ETH) {
+      if (_series.underlying == Constants.ethAddress()) {
         require(msg.value == amount);
         IERC20(_series.strikeAsset).safeTransfer(msg.sender, exerciseAmount);
       } else {
@@ -199,7 +198,7 @@ contract OptionRegistry {
     }
 
    function transferOutUnderlying(Types.OptionSeries memory _series, uint amount) internal {
-      if (_series.underlying == ETH) {
+      if (_series.underlying == Constants.ethAddress()) {
         msg.sender.transfer(amount);
       } else {
         IERC20(_series.underlying).safeTransfer(msg.sender, amount);
@@ -207,7 +206,7 @@ contract OptionRegistry {
     }
 
    function transferOutStrike(Types.OptionSeries memory _series, uint amount) internal {
-     if (_series.strikeAsset == ETH) {
+     if (_series.strikeAsset == Constants.ethAddress()) {
        msg.sender.transfer(amount);
      } else {
        IERC20(_series.strikeAsset).safeTransfer(msg.sender, amount);
