@@ -1,7 +1,7 @@
 pragma solidity >=0.5.0 <0.7.0;
 
 import { Constants } from "./lib/Constants.sol";
-import "./lib/ABDKMath64x64.sol";
+import "./lib/ABDKMathQuad.sol";
 import "./ownership/Ownable.sol";
 import "./interfaces/IERC20.sol";
 import "./tokens/ERC20.sol";
@@ -11,8 +11,9 @@ contract LiquidityPool is
   ERC20
 {
   using SafeERC20 for IERC20;
-  using ABDKMath64x64 for uint256;
-  using ABDKMath64x64 for int128;
+  using ABDKMathQuad for uint256;
+  using ABDKMathQuad for bytes16;
+  using ABDKMathQuad for int256;
 
   address strikeAsset;
   uint riskFreeRate;
@@ -57,10 +58,10 @@ contract LiquidityPool is
       return true;
     }
     uint tokenBalance = IERC20(strikeAsset).balanceOf(address(this));
-    uint totalAssets =  tokenBalance + allocated;
-    int128 percentage = amount.divu(totalAssets);
-    uint newTokens = percentage.mulu(totalAssets);
-    _mint(msg.sender, newTokens);
+    bytes16 totalAssets =  (tokenBalance + allocated).fromUInt();
+    bytes16 percentage = amount.fromUInt().div(totalAssets);
+    bytes16 newTokens = percentage.mul(totalAssets);
+    _mint(msg.sender, newTokens.toUInt());
     emit LiquidityAdded(amount);
     return true;
   }
@@ -76,10 +77,10 @@ contract LiquidityPool is
       emit LiquidityAdded(amount);
       return true;
     }
-    uint totalAssets = address(this).balance + allocated + msg.value;
-    int128 percentage = msg.value.divu(totalAssets);
-    uint newTokens = percentage.mulu(totalAssets);
-    _mint(msg.sender, newTokens);
+    bytes16 totalAssets = (address(this).balance + allocated + msg.value).fromUInt();
+    bytes16 percentage = msg.value.fromUInt().div(totalAssets);
+    bytes16 newTokens = percentage.mul(totalAssets);
+    _mint(msg.sender, newTokens.toUInt());
     emit LiquidityAdded(amount);
     return true;
   }

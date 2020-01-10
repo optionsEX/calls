@@ -377,14 +377,19 @@ contract("Protocol", function() {
 
     it('Adds additional liquidity from new account', async () => {
       const balance = await USDMock.methods.balanceOf(accounts[1]).call();
-      await USDMock.methods.approve(liquidityPool._address, toEth('9')).send({from: accounts[1]});
+      const sendAmount = toEth('9');
+      await USDMock.methods.approve(liquidityPool._address, sendAmount).send({from: accounts[1]});
       const totalSupply = await liquidityPool.methods.totalSupply().call();
-      const addLiquidity = await liquidityPool.methods.addLiquidity(toEth('9')).send({from: accounts[1]});
-      const expectedBalance = (9 / 10) * 10;
+      const addLiquidity = await liquidityPool.methods.addLiquidity(sendAmount).send({from: accounts[1]});
       const liquidityPoolBalance = await liquidityPool.methods.balanceOf(accounts[1]).call();
-      console.log({balance, totalSupply, liquidityPoolBalance, expected}, fromWei(balance))
-      assert.strictEqual(liquidityPoolBalance, toEth('9'));
+      const newTotalSupply = await liquidityPool.methods.totalSupply().call();
 
+      // due to floating point amounts can be off by 1 wei.
+      // For a user this should still be acceptable and the rounding error can be accounted for
+      const difference = fromWei(liquidityPoolBalance) / fromWei(sendAmount);
+      const supplyDifference = fromWei(newTotalSupply) / (fromWei(sendAmount) + fromWei(totalSupply));
+      assert.strictEqual(difference, 1);
+      assert.strictEqual(supplyDifference, 1);
     })
 
 
