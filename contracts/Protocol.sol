@@ -2,10 +2,12 @@ pragma solidity >=0.5.0 <0.7.0;
 
 import "./OptionRegistry.sol";
 import "./Exchange.sol";
+import "./LiquidityPools.sol";
 
 contract Protocol is
   OptionRegistry,
-  Exchange
+  Exchange,
+  LiquidityPools
 {
 
   constructor(address _token, address _usd) public {

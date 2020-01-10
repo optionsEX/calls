@@ -1,4 +1,5 @@
 const ERC20 = require('Embark/contracts/ERC20')
+const LiquidityPool = require('Embark/contracts/LiquidityPool');
 
 module.exports.toEth = function(str) {
   return str + '000000000000000000';
@@ -6,6 +7,10 @@ module.exports.toEth = function(str) {
 
 module.exports.createERC20Instance = function(address) {
   return new web3.eth.Contract(ERC20._jsonInterface, address);
+}
+
+module.exports.createLiquidityPoolInstance = function(address) {
+  return new web3.eth.Contract(LiquidityPool._jsonInterface, address);
 }
 
 module.exports.fromWei = function(str) {

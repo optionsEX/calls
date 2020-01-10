@@ -4,7 +4,7 @@ const ERC20 = require('Embark/contracts/ERC20');
 const USDMock = require('Embark/contracts/USDMock');
 const NewToken = require('Embark/contracts/NewToken');
 const moment = require('moment');
-const { toEth, createERC20Instance, fromWei, getBalance, increaseTime } = require('../utils/testUtils');
+const { toEth, createERC20Instance, createLiquidityPoolInstance, fromWei, getBalance, increaseTime } = require('../utils/testUtils');
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 let expiration = moment().add(3, 'weeks');
@@ -348,8 +348,45 @@ contract("Protocol", function() {
       const balance = await optionToken.methods.balanceOf(accounts[1]).call();
       assert.strictEqual(balance, toEth('1'));
     })
-
-    // TODO withdraw funds from exchange
   })
-  //TODO test option writing pool
+
+  describe("Liquidity Pools", async () => {
+    let liquidityPool;
+    it('Creates a liquidity pool with ERC20 as strikeAsset', async () => {
+      const lp = await protocol.methods.createLiquidityPool(
+        USDMock._address,
+        ZERO_ADDRESS,
+        '3',
+        '80'
+      ).send({from: accounts[0]});
+      const { events: { LiquidityPoolCreated: { event, returnValues } } } = lp;
+      assert.strictEqual(event, 'LiquidityPoolCreated');
+      assert.strictEqual(returnValues.strikeAsset, USDMock._address);
+      liquidityPool = createLiquidityPoolInstance(returnValues.lp);
+    })
+
+    it('Adds liquidity to the liquidityPool', async () => {
+      const balance = await USDMock.methods.balanceOf(accounts[0]).call();
+      await USDMock.methods.approve(liquidityPool._address, toEth('1')).send({from: accounts[0]});
+      const addLiquidity = await liquidityPool.methods.addLiquidity(toEth('1')).send({from: accounts[0], gas: 13289970});
+      const liquidityPoolBalance = await liquidityPool.methods.balanceOf(accounts[0]).call();
+      const { events: { LiquidityAdded: { event } } } = addLiquidity;
+      assert.strictEqual(liquidityPoolBalance, toEth('1'));
+      assert.strictEqual(event, 'LiquidityAdded');
+    })
+
+    it('Adds additional liquidity from new account', async () => {
+      const balance = await USDMock.methods.balanceOf(accounts[1]).call();
+      await USDMock.methods.approve(liquidityPool._address, toEth('9')).send({from: accounts[1]});
+      const totalSupply = await liquidityPool.methods.totalSupply().call();
+      const addLiquidity = await liquidityPool.methods.addLiquidity(toEth('9')).send({from: accounts[1]});
+      const expectedBalance = (9 / 10) * 10;
+      const liquidityPoolBalance = await liquidityPool.methods.balanceOf(accounts[1]).call();
+      console.log({balance, totalSupply, liquidityPoolBalance, expected}, fromWei(balance))
+      assert.strictEqual(liquidityPoolBalance, toEth('9'));
+
+    })
+
+
+  })
 })
