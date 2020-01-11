@@ -352,6 +352,7 @@ contract("Protocol", function() {
 
   describe("Liquidity Pools", async () => {
     let liquidityPool;
+    let ethLiquidityPool;
     it('Creates a liquidity pool with ERC20 as strikeAsset', async () => {
       const lp = await protocol.methods.createLiquidityPool(
         USDMock._address,
@@ -375,6 +376,27 @@ contract("Protocol", function() {
       assert.strictEqual(event, 'LiquidityAdded');
     })
 
+    it('Creates a liquidity pool with ETH as strikeAsset', async () => {
+      const lp = await protocol.methods.createLiquidityPool(
+        ZERO_ADDRESS,
+        USDMock._address,
+        '3',
+        '80'
+      ).send({from: accounts[0]});
+      const { events: { LiquidityPoolCreated: { event, returnValues } } } = lp;
+      assert.strictEqual(event, 'LiquidityPoolCreated');
+      assert.strictEqual(returnValues.strikeAsset, ZERO_ADDRESS);
+      ethLiquidityPool = createLiquidityPoolInstance(returnValues.lp);
+    })
+
+    it('Adds liquidity to the ETH liquidityPool', async () => {
+      const addLiquidity = await ethLiquidityPool.methods.addLiquidity(toEth('1')).send({from: accounts[0], gas: 13289970, value: toEth('1')});
+      const liquidityPoolBalance = await ethLiquidityPool.methods.balanceOf(accounts[0]).call();
+      const { events: { LiquidityAdded: { event } } } = addLiquidity;
+      assert.strictEqual(liquidityPoolBalance, toEth('1'));
+      assert.strictEqual(event, 'LiquidityAdded');
+    })
+
     it('Adds additional liquidity from new account', async () => {
       const balance = await USDMock.methods.balanceOf(accounts[1]).call();
       const sendAmount = toEth('9');
@@ -391,7 +413,6 @@ contract("Protocol", function() {
       assert.strictEqual(difference, 1);
       assert.strictEqual(supplyDifference, 1);
     })
-
 
   })
 })
