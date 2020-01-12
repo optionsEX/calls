@@ -3,17 +3,16 @@ pragma experimental ABIEncoderV2;
 
 import "./interfaces/IERC20.sol";
 import "./tokens/OptionToken.sol";
-import "./tokens/SafeERC20.sol";
+import "./tokens/UniversalERC20.sol";
 import { Types } from "./lib/Types.sol";
 import { Constants } from "./lib/Constants.sol";
 
 /// @author Brian Wheeler - (DSF Protocol)
 contract OptionRegistry {
 
-    using SafeERC20 for IERC20;
+    using UniversalERC20 for IERC20;
     string public constant VERSION = "1.0";
-
-    IERC20 public usdERC20;
+    address internal usd;
 
     mapping(address => uint) public openInterest;
     mapping(address => uint) public earlyExercised;
@@ -27,15 +26,15 @@ contract OptionRegistry {
     event SeriesRedeemed(address series, uint underlyingAmount, uint strikeAmount);
 
     constructor(address usdToken) public {
-      usdERC20 = IERC20(usdToken);
+      usd = usdToken;
     }
     // Note, this just creates an option token, it doesn't guarantee
     // settlement of that token. For guaranteed settlement see the DSFProtocolProxy contract(s)
     function issue(address underlying, address strikeAsset, uint expiration, Types.Flavor flavor, uint strike) public returns (address) {
         require(expiration > now, "Already expired");
         require(strike > 1 ether, "Strike is not greater than 1");
-        address u = underlying == address(0) ? Constants.ethAddress() : underlying;
-        address s = strikeAsset == address(0) ? address(usdERC20) : strikeAsset;
+        address u = IERC20(underlying).isETH() ? Constants.ethAddress() : underlying;
+        address s = strikeAsset == address(0) ? usd : strikeAsset;
         bytes32 issuanceHash = getIssuanceHash(underlying, strikeAsset, expiration, flavor, strike);
         require(seriesExists[issuanceHash] == false, "Series already exists");
         address series = address(new OptionToken(issuanceHash));
@@ -79,7 +78,7 @@ contract OptionRegistry {
         if (series.flavor == Types.Flavor.Call) {
           transferOutUnderlying(series, amount);
         } else {
-          usdERC20.safeTransfer(msg.sender, amount * series.strike / 1 ether);
+          IERC20(series.strikeAsset).universalTransfer(msg.sender, amount * series.strike / 1 ether);
         }
         return true;
     }
@@ -146,7 +145,7 @@ contract OptionRegistry {
         }
     }
 
-    function settle(address _series) public returns (uint usd) {
+    function settle(address _series) public returns (uint strikeAmount) {
         Types.OptionSeries memory series = seriesInfo[_series];
         require(now > series.expiration);
 
@@ -154,66 +153,39 @@ contract OptionRegistry {
         OptionToken(_series).burnFrom(msg.sender, bal);
 
         uint percent = bal * 1 ether / (totalInterest[_series] - earlyExercised[_series]);
-        usd = holdersSettlement[_series] * percent / 1 ether;
-        usdERC20.safeTransfer(msg.sender, usd);
-        return usd;
+        strikeAmount = holdersSettlement[_series] * percent / 1 ether;
+        IERC20(series.strikeAsset).universalTransfer(msg.sender, strikeAmount);
+        return strikeAmount;
     }
 
     function openCall(address underlying, uint amount) internal {
-      if(underlying == Constants.ethAddress()) require(msg.value == amount);
-      else IERC20(underlying).safeTransferFrom(msg.sender, address(this), amount);
+      IERC20(underlying).universalTransferFrom(msg.sender, address(this), amount);
     }
 
     function openPut(address strikeAsset, uint amount, uint strike) internal {
-      if (strikeAsset != Constants.ethAddress()) {
         require(msg.value == 0, "msg.value is not zero");
         uint escrow = amount * strike;
         require(escrow / amount == strike, "escrow does not balance");
         escrow /= 1 ether;
-        IERC20(strikeAsset).safeTransferFrom(msg.sender, address(this), escrow);
-      } else {
-        uint escrow = amount * strike;
-        require(escrow / amount == strike, "escrow does not balance");
-        escrow /= 1 ether;
-        require(msg.value == escrow, "msg.value does not match escrow");
-      }
+        IERC20(strikeAsset).universalTransferFrom(msg.sender, address(this), escrow);
     }
 
     function exerciseCall(Types.OptionSeries memory _series, uint amount, uint exerciseAmount) internal {
-      if (_series.underlying == Constants.ethAddress()) {
-        msg.sender.transfer(amount);
-        require(msg.value == 0);
-        IERC20(_series.strikeAsset).safeTransferFrom(msg.sender, address(this), exerciseAmount);
-      } else {
-        IERC20(_series.underlying).safeTransfer(msg.sender, amount);
-        IERC20(_series.strikeAsset).safeTransferFrom(msg.sender, address(this), exerciseAmount);
-      }
+      IERC20(_series.underlying).universalTransfer(msg.sender, amount);
+      IERC20(_series.strikeAsset).universalTransferFrom(msg.sender, address(this), exerciseAmount);
     }
 
     function exercisePut(Types.OptionSeries memory _series, uint amount, uint exerciseAmount) internal {
-      if (_series.underlying == Constants.ethAddress()) {
-        require(msg.value == amount);
-        IERC20(_series.strikeAsset).safeTransfer(msg.sender, exerciseAmount);
-      } else {
-        IERC20(_series.underlying).safeTransferFrom(msg.sender, address(this), amount);
-        IERC20(_series.strikeAsset).safeTransfer(msg.sender, exerciseAmount);
-      }
+      IERC20(_series.underlying).universalTransferFrom(msg.sender, address(this), amount);
+      IERC20(_series.strikeAsset).universalTransfer(msg.sender, exerciseAmount);
     }
 
    function transferOutUnderlying(Types.OptionSeries memory _series, uint amount) internal {
-      if (_series.underlying == Constants.ethAddress()) {
-        msg.sender.transfer(amount);
-      } else {
-        IERC20(_series.underlying).safeTransfer(msg.sender, amount);
-      }
+     IERC20(_series.underlying).universalTransfer(msg.sender, amount);
     }
 
    function transferOutStrike(Types.OptionSeries memory _series, uint amount) internal {
-     if (_series.strikeAsset == Constants.ethAddress()) {
-       msg.sender.transfer(amount);
-     } else {
-       IERC20(_series.strikeAsset).safeTransfer(msg.sender, amount);
-     }
+     IERC20(_series.strikeAsset).universalTransfer(msg.sender, amount);
    }
 
     /**

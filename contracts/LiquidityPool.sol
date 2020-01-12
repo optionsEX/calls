@@ -28,7 +28,7 @@ contract LiquidityPool is
   constructor(address _strikeAsset, address underlying, uint rfr, uint iv) public {
     strikeAsset = _strikeAsset;
     riskFreeRate = rfr;
-    address underlyingAddress = address(0) == underlying ? Constants.ethAddress() : underlying;
+    address underlyingAddress = IERC20(underlying).isETH() ? Constants.ethAddress() : underlying;
     impliedVolatility[underlyingAddress] = iv;
   }
 
