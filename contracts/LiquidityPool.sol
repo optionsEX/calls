@@ -1,6 +1,8 @@
 pragma solidity >=0.5.0 <0.7.0;
+pragma experimental ABIEncoderV2;
 
 import { Constants } from "./lib/Constants.sol";
+import { Types } from "./lib/Types.sol";
 import "./lib/ABDKMathQuad.sol";
 import "./tokens/ERC20.sol";
 import "./tokens/UniversalERC20.sol";
@@ -56,5 +58,15 @@ contract LiquidityPool is
     _mint(msg.sender, newTokens.toUInt());
     emit LiquidityAdded(amount);
     return true;
+  }
+
+  function quotePrice(Types.OptionSeries memory optionSeries)
+    public
+    view
+    returns (uint)
+  {
+    uint iv = impliedVolatility[optionSeries.underlying];
+    require(iv > 0);
+    return uint(1);
   }
 }

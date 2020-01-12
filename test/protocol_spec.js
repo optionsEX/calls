@@ -1,5 +1,8 @@
 /*global contract, it*/
 const protocol = require('Embark/contracts/Protocol');
+const optionRegistry = require('Embark/contracts/OptionRegistry');
+const exchange = require('Embark/contracts/Exchange');
+const liquidityPools = require('Embark/contracts/LiquidityPools');
 const ERC20 = require('Embark/contracts/ERC20');
 const USDMock = require('Embark/contracts/USDMock');
 const NewToken = require('Embark/contracts/NewToken');
@@ -32,15 +35,22 @@ config({
   },
   contracts: {
     "Constants": {},
+    "Exchange": {},
+    "LiquidityPools": {},
     "USDMock": {},
     "TokenMock": {},
+    "OptionRegistry": {
+      "args": [
+        "$USDMock"
+      ]
+    },
     "NewToken": {
        instanceOf: "USDMock",
     },
     "Protocol": {
       "args": [
-        "$TokenMock",
-        "$USDMock"
+        "$OptionRegistry",
+        "$LiquidityPools"
       ]
     }
   }
@@ -61,14 +71,14 @@ contract("Protocol", function() {
     let erc20PutOptionExpiration;
 
     it('creates an option token series', async () => {
-      const issue = await protocol.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), call, strike).send({from: accounts[0]})
+      const issue = await optionRegistry.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), call, strike).send({from: accounts[0]})
       const { events: { OptionTokenCreated } } = issue
       assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated')
       optionToken = createERC20Instance(OptionTokenCreated.returnValues.token)
     })
 
     it('opens option token with ETH', async () => {
-      const opened = await protocol.methods.open(optionToken._address, toEth('2')).send({from: accounts[0], value: toEth('2')})
+      const opened = await optionRegistry.methods.open(optionToken._address, toEth('2')).send({from: accounts[0], value: toEth('2')})
       const balance = await optionToken.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, toEth('2'))
     })
@@ -82,7 +92,7 @@ contract("Protocol", function() {
     it('receiver attempts to close and transaction should revert', async () => {
       let closed;
       try {
-        closed = await protocol.methods.close(optionToken._address, toEth('1')).send({from: accounts[1]})
+        closed = await optionRegistry.methods.close(optionToken._address, toEth('1')).send({from: accounts[1]})
       } catch(e) {
         const reverted = e.message.includes('revert Caller did not write sufficient amount');
         assert.strictEqual(reverted, true);
@@ -93,13 +103,13 @@ contract("Protocol", function() {
 
     it('new account exercises option', async () => {
       await USDMock.methods.mint(accounts[1], toEth('1000')).send({from: accounts[1]});
-      const series = await protocol.methods.seriesInfo(optionToken._address).call();
+      const series = await optionRegistry.methods.seriesInfo(optionToken._address).call();
       const { expiration, strike } = series;
       const balance = await optionToken.methods.balanceOf(accounts[1]).call();
       const ethBalance = await getBalance(accounts[1]);
       const exerciseAmount = fromWei(balance) * fromWei(strike);
-      await USDMock.methods.approve(protocol._address, toEth(exerciseAmount.toString())).send({from: accounts[1]});
-      await protocol.methods.exercise(optionToken._address, toEth('1')).send({from: accounts[1]});
+      await USDMock.methods.approve(optionRegistry._address, toEth(exerciseAmount.toString())).send({from: accounts[1]});
+      await optionRegistry.methods.exercise(optionToken._address, toEth('1')).send({from: accounts[1]});
       const newBalance = await optionToken.methods.balanceOf(accounts[1]).call();
       const newBalanceUSD = await USDMock.methods.balanceOf(accounts[1]).call();
       const newBalanceEth = await getBalance(accounts[1]);
@@ -109,7 +119,7 @@ contract("Protocol", function() {
     })
 
     it('writer closes not transfered balance on option token', async () => {
-      const closed = await protocol.methods.close(optionToken._address, toEth('1')).send({from: accounts[0]})
+      const closed = await optionRegistry.methods.close(optionToken._address, toEth('1')).send({from: accounts[0]})
       const balance = await optionToken.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, '0')
     })
@@ -122,7 +132,7 @@ contract("Protocol", function() {
       const time = getDiffSeconds(now, future);
       await increaseTime(Number(time));
       currentTime = future;
-      const redeem = await protocol.methods.redeem(optionToken._address).send({from: accounts[0]});
+      const redeem = await optionRegistry.methods.redeem(optionToken._address).send({from: accounts[0]});
       const newBalanceUSD = await USDMock.methods.balanceOf(accounts[0]).call();
       assert.strictEqual(fromWei(newBalanceUSD), 300);
     })
@@ -132,15 +142,15 @@ contract("Protocol", function() {
       const future = moment(now).add(14, 'M');
       erc20CallExpiration = future;
       await NewToken.methods.mint(accounts[0], toEth('1000')).send({from: accounts[0]});
-      const issue = await protocol.methods.issue(NewToken._address, USDMock._address, future.unix(), call, strike).send({from: accounts[0]})
+      const issue = await optionRegistry.methods.issue(NewToken._address, USDMock._address, future.unix(), call, strike).send({from: accounts[0]})
       const { events: { OptionTokenCreated } } = issue
       assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated')
       erc20CallOption = createERC20Instance(OptionTokenCreated.returnValues.token)
     })
 
     it('opens an ERC20 call option', async () => {
-      await NewToken.methods.approve(protocol._address, toEth(toEth('2'))).send({from: accounts[0]});
-      const issue = await protocol.methods.open(erc20CallOption._address, toEth('2')).send({from: accounts[0]})
+      await NewToken.methods.approve(optionRegistry._address, toEth(toEth('2'))).send({from: accounts[0]});
+      const issue = await optionRegistry.methods.open(erc20CallOption._address, toEth('2')).send({from: accounts[0]})
       const balance = await erc20CallOption.methods.balanceOf(accounts[0]).call();
       assert.strictEqual(balance, toEth('2'));
     })
@@ -155,12 +165,12 @@ contract("Protocol", function() {
       await USDMock.methods.mint(accounts[1], toEth('1000')).send({from: accounts[1]});
       const usdBalance = await USDMock.methods.balanceOf(accounts[1]).call();
       const oldBalanceToken = await NewToken.methods.balanceOf(accounts[1]).call();
-      const series = await protocol.methods.seriesInfo(erc20CallOption._address).call();
+      const series = await optionRegistry.methods.seriesInfo(erc20CallOption._address).call();
       const { expiration, strike } = series;
       const balance = await erc20CallOption.methods.balanceOf(accounts[1]).call();
       const exerciseAmount = fromWei(balance) * fromWei(strike);
-      await USDMock.methods.approve(protocol._address, toEth(exerciseAmount.toString())).send({from: accounts[1]});
-      await protocol.methods.exercise(erc20CallOption._address, toEth('1')).send({from: accounts[1]});
+      await USDMock.methods.approve(optionRegistry._address, toEth(exerciseAmount.toString())).send({from: accounts[1]});
+      await optionRegistry.methods.exercise(erc20CallOption._address, toEth('1')).send({from: accounts[1]});
       const newBalance = await erc20CallOption.methods.balanceOf(accounts[1]).call();
       const newBalanceUSD = await USDMock.methods.balanceOf(accounts[1]).call();
       const newBalanceToken = await NewToken.methods.balanceOf(accounts[1]).call();
@@ -170,7 +180,7 @@ contract("Protocol", function() {
     })
 
     it('writer closes not transfered balance on ERC20 call option', async () => {
-      const closed = await protocol.methods.close(erc20CallOption._address, toEth('1')).send({from: accounts[0]})
+      const closed = await optionRegistry.methods.close(erc20CallOption._address, toEth('1')).send({from: accounts[0]})
       const balance = await optionToken.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, '0')
     })
@@ -182,7 +192,7 @@ contract("Protocol", function() {
       const time = getDiffSeconds(moment(), future);
       await increaseTime(Number(time));
       currentTime = future;
-      const redeem = await protocol.methods.redeem(erc20CallOption._address).send({from: accounts[0]});
+      const redeem = await optionRegistry.methods.redeem(erc20CallOption._address).send({from: accounts[0]});
       const newBalanceUSD = await USDMock.methods.balanceOf(accounts[0]).call();
       const { underlyingAmount, strikeAmount } = redeem.events.SeriesRedeemed.returnValues;
       assert.strictEqual(underlyingAmount, '0');
@@ -193,7 +203,7 @@ contract("Protocol", function() {
     it('creates a put option token series', async () => {
       let expiration = currentTime.add(24, 'M');
       putOptionExpiration = expiration;
-      const issue = await protocol.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), put, strike).send({from: accounts[0]})
+      const issue = await optionRegistry.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), put, strike).send({from: accounts[0]})
       const { events: { OptionTokenCreated } } = issue
       assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated')
       putOption = createERC20Instance(OptionTokenCreated.returnValues.token)
@@ -203,8 +213,8 @@ contract("Protocol", function() {
       const balanceUSD = await USDMock.methods.balanceOf(accounts[0]).call();
       // amount is amount X strike;
       const amount = 2 * 300;
-      await USDMock.methods.approve(protocol._address, toEth(amount)).send({from: accounts[0]});
-      const opened = await protocol.methods.open(putOption._address, toEth('2')).send({from: accounts[0]})
+      await USDMock.methods.approve(optionRegistry._address, toEth(amount)).send({from: accounts[0]});
+      const opened = await optionRegistry.methods.open(putOption._address, toEth('2')).send({from: accounts[0]})
       const balance = await putOption.methods.balanceOf(accounts[0]).call();
       assert.strictEqual(balance, toEth('2'))
     })
@@ -218,12 +228,12 @@ contract("Protocol", function() {
     it('new account exercises put option', async () => {
       await USDMock.methods.mint(accounts[1], toEth('1000')).send({from: accounts[1]});
       const originalBalanceUSD = await USDMock.methods.balanceOf(accounts[1]).call();
-      const series = await protocol.methods.seriesInfo(putOption._address).call();
+      const series = await optionRegistry.methods.seriesInfo(putOption._address).call();
       const { expiration, strike } = series;
       const balance = await putOption.methods.balanceOf(accounts[1]).call();
       const ethBalance = await getBalance(accounts[1]);
       const exerciseAmount = fromWei(balance) * fromWei(strike);
-      await protocol.methods.exercise(putOption._address, balance).send({from: accounts[1], value: toEth('1')});
+      await optionRegistry.methods.exercise(putOption._address, balance).send({from: accounts[1], value: toEth('1')});
       const newBalance = await putOption.methods.balanceOf(accounts[1]).call();
       const newBalanceUSD = await USDMock.methods.balanceOf(accounts[1]).call();
       const newBalanceEth = await getBalance(accounts[1]);
@@ -234,7 +244,7 @@ contract("Protocol", function() {
     })
 
     it('writer closes not transfered balance on put option token', async () => {
-      const closed = await protocol.methods.close(putOption._address, toEth('1')).send({from: accounts[0]})
+      const closed = await optionRegistry.methods.close(putOption._address, toEth('1')).send({from: accounts[0]})
       const balance = await putOption.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, '0')
     })
@@ -243,7 +253,7 @@ contract("Protocol", function() {
       const now = currentTime;
       const future = moment(now).add(14, 'M');
       erc20PutOptionExpiration = future;
-      const issue = await protocol.methods.issue(NewToken._address, USDMock._address, future.unix(), put, strike).send({from: accounts[0]})
+      const issue = await optionRegistry.methods.issue(NewToken._address, USDMock._address, future.unix(), put, strike).send({from: accounts[0]})
       const { events: { OptionTokenCreated } } = issue
       assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated')
       erc20PutOption = createERC20Instance(OptionTokenCreated.returnValues.token)
@@ -255,8 +265,8 @@ contract("Protocol", function() {
       const escrowWei = toEth(escrow.toString())
       await USDMock.methods.mint(accounts[0], toEth('1000')).send({from: accounts[0]});
       const balanceToken = await USDMock.methods.balanceOf(accounts[0]).call();
-      await USDMock.methods.approve(protocol._address, escrowWei).send({from: accounts[0]});
-      const opened = await protocol.methods.open(erc20PutOption._address, toEth('2')).send({from: accounts[0]})
+      await USDMock.methods.approve(optionRegistry._address, escrowWei).send({from: accounts[0]});
+      const opened = await optionRegistry.methods.open(erc20PutOption._address, toEth('2')).send({from: accounts[0]})
       const balance = await erc20PutOption.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, toEth('2'))
     })
@@ -271,15 +281,15 @@ contract("Protocol", function() {
       const balance = await erc20PutOption.methods.balanceOf(accounts[1]).call();
       const strikeBalance = await USDMock.methods.balanceOf(accounts[1]).call();
       const underlyingBalance = await NewToken.methods.balanceOf(accounts[1]).call();
-      const series = await protocol.methods.seriesInfo(erc20PutOption._address).call();
+      const series = await optionRegistry.methods.seriesInfo(erc20PutOption._address).call();
       const { strike } = series;
-      await NewToken.methods.approve(protocol._address, balance).send({from: accounts[1]});
-      await protocol.methods.exercise(erc20PutOption._address, balance).send({from: accounts[1]});
+      await NewToken.methods.approve(optionRegistry._address, balance).send({from: accounts[1]});
+      await optionRegistry.methods.exercise(erc20PutOption._address, balance).send({from: accounts[1]});
       const newUnderlyingBalance = await NewToken.methods.balanceOf(accounts[1]).call();
     })
 
     it('writer closes not transfered balance on erc20 put option', async () => {
-      const closed = await protocol.methods.close(erc20PutOption._address, toEth('1')).send({from: accounts[0]})
+      const closed = await optionRegistry.methods.close(erc20PutOption._address, toEth('1')).send({from: accounts[0]})
       const balance = await erc20PutOption.methods.balanceOf(accounts[0]).call()
       assert.strictEqual(balance, '0')
     })
@@ -291,22 +301,23 @@ contract("Protocol", function() {
 
     it('Creates an eth call option and deposits it on the exchange', async () => {
       optionTokenExpiration = moment(currentTime).add('12', 'M');
-      const issue = await protocol.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, optionTokenExpiration.unix(), call, strike).send({from: accounts[0]});
+      const issue = await optionRegistry.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, optionTokenExpiration.unix(), call, strike).send({from: accounts[0]});
       const { events: { OptionTokenCreated } } = issue;
       assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated');
       optionToken = createERC20Instance(OptionTokenCreated.returnValues.token);
-      const opened = await protocol.methods.open(optionToken._address, toEth('2')).send({from: accounts[0], value: toEth('2')});
+      const opened = await optionRegistry.methods.open(optionToken._address, toEth('2')).send({from: accounts[0], value: toEth('2')});
       const balance = await optionToken.methods.balanceOf(accounts[0]).call();
       assert.strictEqual(balance, toEth('2'));
-      await optionToken.methods.approve(protocol._address, balance).send({from: accounts[0]});
-      const deposit = await protocol.methods.depositToken(optionToken._address, balance).send({from: accounts[0]});
+      await optionToken.methods.approve(exchange._address, balance).send({from: accounts[0]});
+      // Exchange
+      const deposit = await exchange.methods.depositToken(optionToken._address, balance).send({from: accounts[0]});
       const { returnValues: { balance: bal }, event } = deposit.events.Deposit;
       assert.strictEqual(bal, balance);
       assert.strictEqual(event, 'Deposit');
     });
 
     it('Creates a limit order to the sell the eth call', async () => {
-      const order = await protocol.methods.createOrder(
+      const order = await exchange.methods.createOrder(
         USDMock._address,
         toEth('50'),
         optionToken._address,
@@ -320,9 +331,9 @@ contract("Protocol", function() {
 
     it('Buys the options from a holder of strike token', async () => {
       const usdBalance = await USDMock.methods.balanceOf(accounts[1]).call();
-      await USDMock.methods.approve(protocol._address, toEth('26')).send({from: accounts[1]});
-      const deposit = await protocol.methods.depositToken(USDMock._address, toEth('26')).send({from: accounts[1]});
-      const trade = await protocol.methods.trade(
+      await USDMock.methods.approve(exchange._address, toEth('26')).send({from: accounts[1]});
+      const deposit = await exchange.methods.depositToken(USDMock._address, toEth('26')).send({from: accounts[1]});
+      const trade = await exchange.methods.trade(
         USDMock._address,
         toEth('50'),
         optionToken._address,
@@ -332,7 +343,7 @@ contract("Protocol", function() {
         accounts[0],
         toEth('25')
       ).send({from: accounts[1]});
-      const optionBalance = await protocol.methods.balanceOf(optionToken._address, accounts[1]).call();
+      const optionBalance = await exchange.methods.balanceOf(optionToken._address, accounts[1]).call();
       const { events: Trade } = trade;
       assert.strictEqual(optionBalance, toEth('1'));
       assert.strictEqual(Trade.Trade.event, 'Trade');
@@ -341,7 +352,7 @@ contract("Protocol", function() {
     it('Buyer of option should be able to withdraw from exchange', async () => {
       const balanceStart = await optionToken.methods.balanceOf(accounts[1]).call();
       assert.strictEqual(balanceStart, '0');
-      const withdraw = await protocol.methods.withdrawToken(
+      const withdraw = await exchange.methods.withdrawToken(
         optionToken._address,
         toEth('1')
       ).send({from: accounts[1]});
@@ -354,7 +365,7 @@ contract("Protocol", function() {
     let liquidityPool;
     let ethLiquidityPool;
     it('Creates a liquidity pool with ERC20 as strikeAsset', async () => {
-      const lp = await protocol.methods.createLiquidityPool(
+      const lp = await liquidityPools.methods.createLiquidityPool(
         USDMock._address,
         ZERO_ADDRESS,
         '3',
@@ -377,7 +388,7 @@ contract("Protocol", function() {
     })
 
     it('Creates a liquidity pool with ETH as strikeAsset', async () => {
-      const lp = await protocol.methods.createLiquidityPool(
+      const lp = await liquidityPools.methods.createLiquidityPool(
         ZERO_ADDRESS,
         USDMock._address,
         '3',
@@ -413,6 +424,8 @@ contract("Protocol", function() {
       assert.strictEqual(difference, 1);
       assert.strictEqual(supplyDifference, 1);
     })
+
+    // get option quote from liquidity pool
 
   })
 })

@@ -14,7 +14,6 @@ contract OptionRegistry {
     string public constant VERSION = "1.0";
 
     IERC20 public usdERC20;
-    IERC20 public protocolToken;
 
     mapping(address => uint) public openInterest;
     mapping(address => uint) public earlyExercised;
@@ -26,6 +25,10 @@ contract OptionRegistry {
 
     event OptionTokenCreated(address token);
     event SeriesRedeemed(address series, uint underlyingAmount, uint strikeAmount);
+
+    constructor(address usdToken) public {
+      usdERC20 = IERC20(usdToken);
+    }
     // Note, this just creates an option token, it doesn't guarantee
     // settlement of that token. For guaranteed settlement see the DSFProtocolProxy contract(s)
     function issue(address underlying, address strikeAsset, uint expiration, Types.Flavor flavor, uint strike) public returns (address) {

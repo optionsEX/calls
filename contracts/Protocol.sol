@@ -1,18 +1,14 @@
 pragma solidity >=0.5.0 <0.7.0;
 
-import "./OptionRegistry.sol";
-import "./Exchange.sol";
-import "./LiquidityPools.sol";
 
-contract Protocol is
-  OptionRegistry,
-  Exchange,
-  LiquidityPools
-{
+contract Protocol {
 
-  constructor(address _token, address _usd) public {
-    protocolToken = IERC20(_token);
-    usdERC20 = IERC20(_usd);
+  address public optionRegistry;
+  address public liquidityPools;
+
+  constructor(address _optionRegistry, address _liquidityPools) public {
+    optionRegistry = _optionRegistry;
+    liquidityPools = _liquidityPools;
   }
 
   function() external payable {
