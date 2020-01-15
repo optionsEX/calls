@@ -3,11 +3,13 @@ const protocol = require('Embark/contracts/Protocol');
 const optionRegistry = require('Embark/contracts/OptionRegistry');
 const exchange = require('Embark/contracts/Exchange');
 const liquidityPools = require('Embark/contracts/LiquidityPools');
+const uniswapFactory = require('Embark/contracts/uniswap_factory');
+const uniswapExchange = require('Embark/contracts/uniswap_exchange');
 const ERC20 = require('Embark/contracts/ERC20');
 const USDMock = require('Embark/contracts/USDMock');
 const NewToken = require('Embark/contracts/NewToken');
 const moment = require('moment');
-const { toEth, createERC20Instance, createLiquidityPoolInstance, fromWei, getBalance, increaseTime } = require('../utils/testUtils');
+const { toEth, createERC20Instance, createLiquidityPoolInstance, createUniswapExchangeInstance, fromWei, getBalance, increaseTime } = require('../utils/testUtils');
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 let expiration = moment().add(3, 'weeks');
@@ -28,7 +30,7 @@ config({
     accounts: [
       {
         mnemonic: "foster gesture flock merge beach plate dish view friend leave drink valley shield list enemy",
-        balance: "5 ether",
+        balance: "100 ether",
         numAddresses: "10"
       }
     ]
@@ -52,7 +54,12 @@ config({
         "$OptionRegistry",
         "$LiquidityPools"
       ]
-    }
+    },
+    "PriceFeed": {
+      "args": ["$uniswap_factory"]
+    },
+    "uniswap_exchange": {},
+    "uniswap_factory": {}
   }
 }, (_err, web3_accounts) => {
   accounts = web3_accounts;
@@ -62,6 +69,7 @@ config({
 contract("Protocol", function() {
   let currentTime;
   describe("option token", async() => {
+    let ethUsdUniswap;
     let optionToken;
     let erc20CallOption;
     let erc20CallExpiration;
@@ -69,6 +77,26 @@ contract("Protocol", function() {
     let putOptionExpiration;
     let erc20PutOption;
     let erc20PutOptionExpiration;
+
+    before(async () => {
+      const init = await uniswapFactory.methods.initializeFactory(uniswapExchange._address).send({from: accounts[2]});
+      const create = await uniswapFactory.methods.createExchange(USDMock._address).send({from: accounts[2]});
+      const { events: { NewExchange } } = create;
+      const usdUniswapAddress = NewExchange.returnValues.exchange;
+      ethUsdUniswap = createUniswapExchangeInstance(usdUniswapAddress);
+      const usdAmount = 300 * 10;
+      const usdWei = toEth(usdAmount.toString());
+      await USDMock.methods.mint(accounts[2], usdWei).send({from: accounts[2]});
+      await USDMock.methods.approve(ethUsdUniswap._address, usdWei).send({from: accounts[2]});
+      // set initial price ETH/USD @ 300
+      const addedLiquidity = await ethUsdUniswap.methods.addLiquidity('0', usdWei, expiration.unix()).send({
+        from: accounts[2],
+        value: toEth('10'),
+        gas: 5000000
+      });
+      const { events: { AddLiquidity, Transfer } } = addedLiquidity
+      assert.strictEqual(AddLiquidity.returnValues.token_amount, usdWei, "supplied token amount does not match expected");
+    });
 
     it('creates an option token series', async () => {
       const issue = await optionRegistry.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), call, strike).send({from: accounts[0]})
@@ -417,12 +445,16 @@ contract("Protocol", function() {
       const liquidityPoolBalance = await liquidityPool.methods.balanceOf(accounts[1]).call();
       const newTotalSupply = await liquidityPool.methods.totalSupply().call();
 
-      // due to floating point amounts can be off by 1 wei.
+      // floating point amounts can be off by 1 wei.
       // For a user this should still be acceptable and the rounding error can be accounted for
       const difference = fromWei(liquidityPoolBalance) / fromWei(sendAmount);
       const supplyDifference = fromWei(newTotalSupply) / (fromWei(sendAmount) + fromWei(totalSupply));
       assert.strictEqual(difference, 1);
       assert.strictEqual(supplyDifference, 1);
+    })
+
+    it('get option quote from liquidity pool', async () => {
+
     })
 
     // get option quote from liquidity pool

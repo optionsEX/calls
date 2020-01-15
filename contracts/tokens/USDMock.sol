@@ -25,7 +25,7 @@ contract USDMock {
         return allowed[_owner][_spender];
     }
 
-    function transfer(address _to, uint256 _value) public returns (bool success) {
+    function transfer(address _to, uint256 _value) public returns (bool) {
         require(balances[msg.sender] >= _value);
         balances[msg.sender] -= _value;
         balances[_to] += _value;
@@ -33,7 +33,7 @@ contract USDMock {
         return true;
     }
 
-    function transferFrom(address _from, address _to, uint256 _value) public returns (bool success) {
+    function transferFrom(address _from, address _to, uint256 _value) public returns (bool) {
         uint256 allow = allowed[_from][msg.sender];
         require(balances[_from] >= _value && allow >= _value);
         balances[_to] += _value;
