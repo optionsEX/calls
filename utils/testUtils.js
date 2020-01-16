@@ -6,6 +6,10 @@ module.exports.toEth = function(str) {
   return str + '000000000000000000';
 }
 
+module.exports.toWei = function(str) {
+  return web3.utils.toWei(str);
+}
+
 module.exports.createERC20Instance = function(address) {
   return new web3.eth.Contract(ERC20._jsonInterface, address);
 }
@@ -25,6 +29,19 @@ module.exports.fromWei = function(str) {
 module.exports.getBalance = function(account) {
   return web3.eth.getBalance(account);
 }
+
+const SECONDS_IN_DAY = 86400;
+const SECONDS_IN_YEAR = SECONDS_IN_DAY * 365.25;
+const genOptionTimeFromUnix = (now, future) => (future - now) / SECONDS_IN_YEAR;
+const genOptionTime = (now, future) => genOptionTimeFromUnix(now.unix(), future.unix())
+const compareBS = (local, remote) => Math.abs(local - fromWei(remote));
+const lessThanCent = (local, remote) => compareBS(local, remote) <= 0.01;
+
+module.exports.genOptionTime = genOptionTime;
+module.exports.genOptionTimeFromUnix = genOptionTimeFromUnix;
+module.exports.lessThanCent = lessThanCent;
+
+
 
 module.exports.increaseTime = async (amount) => {
   return new Promise(function(resolve, reject) {

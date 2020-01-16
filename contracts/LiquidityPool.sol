@@ -4,10 +4,14 @@ pragma experimental ABIEncoderV2;
 import { Constants } from "./lib/Constants.sol";
 import { Types } from "./lib/Types.sol";
 import "./lib/ABDKMathQuad.sol";
+import "./lib/BlackScholes.sol";
 import "./tokens/ERC20.sol";
 import "./tokens/UniversalERC20.sol";
+import "./Protocol.sol";
+import "./PriceFeed.sol";
 
 contract LiquidityPool is
+  BlackScholes,
   ERC20
 {
   using UniversalERC20 for IERC20;
@@ -15,6 +19,7 @@ contract LiquidityPool is
   using ABDKMathQuad for bytes16;
   using ABDKMathQuad for int256;
 
+  address public protocol;
   address strikeAsset;
   uint riskFreeRate;
 
@@ -24,12 +29,17 @@ contract LiquidityPool is
   mapping(address => uint) public impliedVolatility;
 
   event LiquidityAdded(uint amount);
+  event UnderlyingAdded(address underlying);
+  event ImpliedVolatilityUpdated(address underlying, uint iv);
 
-  constructor(address _strikeAsset, address underlying, uint rfr, uint iv) public {
+  constructor(address _protocol, address _strikeAsset, address underlying, uint rfr, uint iv) public {
     strikeAsset = _strikeAsset;
     riskFreeRate = rfr;
     address underlyingAddress = IERC20(underlying).isETH() ? Constants.ethAddress() : underlying;
     impliedVolatility[underlyingAddress] = iv;
+    protocol = _protocol;
+    emit UnderlyingAdded(underlyingAddress);
+    emit ImpliedVolatilityUpdated(underlyingAddress, iv);
   }
 
   function addLiquidity(uint amount)
@@ -60,13 +70,35 @@ contract LiquidityPool is
     return true;
   }
 
-  function quotePrice(Types.OptionSeries memory optionSeries)
+  function getPriceFeed() internal returns (PriceFeed) {
+    address feedAddress = Protocol(protocol).priceFeed();
+    return PriceFeed(feedAddress);
+  }
+
+  function quotePrice(
+    Types.OptionSeries memory optionSeries,
+    uint amount
+  )
     public
-    view
     returns (uint)
   {
     uint iv = impliedVolatility[optionSeries.underlying];
-    require(iv > 0);
-    return uint(1);
+    require(iv > 0, "Implied volatility not found");
+    require(optionSeries.expiration > now, "Already expired");
+    PriceFeed priceFeed = getPriceFeed();
+    uint underlyingPrice = priceFeed.getPriceQuote(
+      optionSeries.strikeAsset,
+      optionSeries.underlying,
+      1 ether
+    );
+    // calculate using black-scholes
+    return retBlackScholesCalc(
+       underlyingPrice,
+       optionSeries.strike,
+       optionSeries.expiration,
+       iv,
+       riskFreeRate,
+       optionSeries.flavor
+    );
   }
 }

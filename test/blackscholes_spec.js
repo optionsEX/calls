@@ -7,7 +7,6 @@ const { toEth, createERC20Instance, fromWei } = require('../utils/testUtils')
 
 const SECONDS_IN_DAY = 86400;
 const SECONDS_IN_YEAR = SECONDS_IN_DAY * 365.25;
-
 const genOptionTime = (now, future) => (future.unix() - now.unix()) / SECONDS_IN_YEAR
 const compareBS = (local, remote) => Math.abs(local - fromWei(remote))
 const lessThanCent = (local, remote) => compareBS(local, remote) <= 0.01

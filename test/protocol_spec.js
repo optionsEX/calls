@@ -5,13 +5,18 @@ const exchange = require('Embark/contracts/Exchange');
 const liquidityPools = require('Embark/contracts/LiquidityPools');
 const uniswapFactory = require('Embark/contracts/uniswap_factory');
 const uniswapExchange = require('Embark/contracts/uniswap_exchange');
+const priceFeed = require('Embark/contracts/PriceFeed');
+const Time = require('Embark/contracts/Time');
 const ERC20 = require('Embark/contracts/ERC20');
 const USDMock = require('Embark/contracts/USDMock');
 const NewToken = require('Embark/contracts/NewToken');
 const moment = require('moment');
-const { toEth, createERC20Instance, createLiquidityPoolInstance, createUniswapExchangeInstance, fromWei, getBalance, increaseTime } = require('../utils/testUtils');
+const bs = require('black-scholes');
+const bsFormula = require('bs-formula');
+const { toEth, createERC20Instance, createLiquidityPoolInstance, createUniswapExchangeInstance, fromWei, getBalance, increaseTime, genOptionTimeFromUnix, toWei } = require('../utils/testUtils');
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const ETH_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 let expiration = moment().add(3, 'weeks');
 const strike = toEth('300');
 const call = 0, put = 1;
@@ -20,6 +25,7 @@ const discount95 = '950000000000000000';
 const noDiscount = '1000000000000000000';
 const SECONDS_IN_DAY = 86400;
 const SECONDS_IN_YEAR = SECONDS_IN_DAY * 365.25;
+const IMPLIED_VOL = '60';
 const getDiffSeconds = (now, future) => (future.unix() - now.unix());
 
 let accounts;
@@ -39,8 +45,10 @@ config({
     "Constants": {},
     "Exchange": {},
     "LiquidityPools": {},
+    "NormalDist": {},
     "USDMock": {},
     "TokenMock": {},
+    "Time": {},
     "OptionRegistry": {
       "args": [
         "$USDMock"
@@ -52,7 +60,8 @@ config({
     "Protocol": {
       "args": [
         "$OptionRegistry",
-        "$LiquidityPools"
+        "$LiquidityPools",
+        "$PriceFeed"
       ]
     },
     "PriceFeed": {
@@ -68,8 +77,8 @@ config({
 
 contract("Protocol", function() {
   let currentTime;
+  let ethUsdUniswap;
   describe("option token", async() => {
-    let ethUsdUniswap;
     let optionToken;
     let erc20CallOption;
     let erc20CallExpiration;
@@ -79,6 +88,9 @@ contract("Protocol", function() {
     let erc20PutOptionExpiration;
 
     before(async () => {
+      // set protocol in liquidity pools
+      await liquidityPools.methods.setup(protocol._address).send({from: accounts[0]});
+
       const init = await uniswapFactory.methods.initializeFactory(uniswapExchange._address).send({from: accounts[2]});
       const create = await uniswapFactory.methods.createExchange(USDMock._address).send({from: accounts[2]});
       const { events: { NewExchange } } = create;
@@ -420,9 +432,13 @@ contract("Protocol", function() {
         ZERO_ADDRESS,
         USDMock._address,
         '3',
-        '80'
+        IMPLIED_VOL
       ).send({from: accounts[0]});
-      const { events: { LiquidityPoolCreated: { event, returnValues } } } = lp;
+      const { events:
+              {
+                LiquidityPoolCreated: { event, returnValues }
+              }
+            } = lp;
       assert.strictEqual(event, 'LiquidityPoolCreated');
       assert.strictEqual(returnValues.strikeAsset, ZERO_ADDRESS);
       ethLiquidityPool = createLiquidityPoolInstance(returnValues.lp);
@@ -453,10 +469,50 @@ contract("Protocol", function() {
       assert.strictEqual(supplyDifference, 1);
     })
 
-    it('get option quote from liquidity pool', async () => {
-
+    it('From eth price quote to USD will match uniswap ', async () => {
+      const quote = await priceFeed.methods.getPriceQuote(
+        ETH_ADDRESS,
+        USDMock._address,
+        toEth('1')
+      ).call({from: accounts[0]});
+      const uniswapQuote = await ethUsdUniswap.methods.getEthToTokenInputPrice(
+        toEth('1')
+      ).call({from: accounts[0]});
+      assert.strictEqual(quote, uniswapQuote, "price feed is incorrect quoted")
     })
 
+    it('Returns a quote for an USD/ETH call option', async () => {
+      const chainTime = await Time.methods.getCurrent().call();
+      const expiration = moment(Number(chainTime) * 1000).add('5', 'M');
+      const timeDiff = expiration.unix() - Number(chainTime);
+      const timeToExpiration = genOptionTimeFromUnix(Number(chainTime), expiration.unix());
+      // Amount of ETH to buy 300 USD
+      const uniswapQuote = await ethUsdUniswap.methods.getTokenToEthInputPrice(
+        toEth('100')
+      ).call();
+      const ethUniswapQuote = await ethUsdUniswap.methods.getEthToTokenInputPrice(
+        toEth('1')
+      ).call();
+      const uniswapQuoteNormal = fromWei(ethUniswapQuote);
+      const strikePrice = uniswapQuoteNormal + 20;
+      const quote = await ethLiquidityPool.methods.quotePrice(
+        [expiration.unix(), call, toWei(strikePrice.toString()), USDMock._address, ETH_ADDRESS],
+        toEth('100')
+      ).call({from: accounts[0]});
+      const volatility = Number(IMPLIED_VOL) / 100;
+      const inputs = {
+        currentPrice: uniswapQuoteNormal,
+        strikePrice,
+        interestRate: 0.03,
+        volatility,
+        timeToExpiration
+      };
+      const computedBS = bsFormula(inputs);
+      const localBS = bs.blackScholes(uniswapQuoteNormal, strikePrice, timeToExpiration, volatility, .03, "call");
+      const percentDiff = (localBS - fromWei(quote)) / localBS;
+      console.log({quote, uniswapQuoteNormal, localBS, computedBS, percentDiff}, fromWei(quote))
+
+    })
     // get option quote from liquidity pool
 
   })
