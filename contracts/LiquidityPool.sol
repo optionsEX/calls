@@ -75,9 +75,23 @@ contract LiquidityPool is
     return PriceFeed(feedAddress);
   }
 
+  function getUnderlyingPrice(
+    Types.OptionSeries memory optionSeries
+  )
+    internal
+    returns (uint)
+  {
+    PriceFeed priceFeed = getPriceFeed();
+    uint underlyingPrice = priceFeed.getPriceQuote(
+      optionSeries.strikeAsset,
+      optionSeries.underlying,
+      1 ether
+    );
+    return underlyingPrice;
+  }
+
   function quotePrice(
-    Types.OptionSeries memory optionSeries,
-    uint amount
+    Types.OptionSeries memory optionSeries
   )
     public
     returns (uint)
@@ -85,12 +99,7 @@ contract LiquidityPool is
     uint iv = impliedVolatility[optionSeries.underlying];
     require(iv > 0, "Implied volatility not found");
     require(optionSeries.expiration > now, "Already expired");
-    PriceFeed priceFeed = getPriceFeed();
-    uint underlyingPrice = priceFeed.getPriceQuote(
-      optionSeries.strikeAsset,
-      optionSeries.underlying,
-      1 ether
-    );
+    uint underlyingPrice = getUnderlyingPrice(optionSeries);
     // calculate using black-scholes
     return retBlackScholesCalc(
        underlyingPrice,
@@ -101,4 +110,19 @@ contract LiquidityPool is
        optionSeries.flavor
     );
   }
+
+  function quotePriceWithUtilization(
+    Types.OptionSeries memory optionSeries,
+    uint amount
+  )
+    public
+    returns (uint)
+  {
+    uint optionPrice = quotePrice(optionSeries);
+    bytes16 underlyingPrice = getUnderlyingPrice(optionSeries).fromUInt();
+    bytes16 utilization = allocated.fromUInt().div(totalLiquidity.fromUInt());
+    uint utilizationPrice = underlyingPrice.mul(utilization).toUInt();
+    return utilizationPrice > optionPrice ? utilizationPrice : optionPrice;
+  }
+
 }

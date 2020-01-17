@@ -481,7 +481,7 @@ contract("Protocol", function() {
       assert.strictEqual(quote, uniswapQuote, "price feed is incorrect quoted")
     })
 
-    it('Returns a quote for an USD/ETH call option', async () => {
+    it('Returns a quote for a single USD/ETH call option', async () => {
       const chainTime = await Time.methods.getCurrent().call();
       const expiration = moment(Number(chainTime) * 1000).add('5', 'M');
       const timeDiff = expiration.unix() - Number(chainTime);
@@ -496,8 +496,7 @@ contract("Protocol", function() {
       const uniswapQuoteNormal = fromWei(ethUniswapQuote);
       const strikePrice = uniswapQuoteNormal + 20;
       const quote = await ethLiquidityPool.methods.quotePrice(
-        [expiration.unix(), call, toWei(strikePrice.toString()), USDMock._address, ETH_ADDRESS],
-        toEth('100')
+        [expiration.unix(), call, toWei(strikePrice.toString()), USDMock._address, ETH_ADDRESS]
       ).call({from: accounts[0]});
       const volatility = Number(IMPLIED_VOL) / 100;
       const inputs = {
@@ -510,7 +509,8 @@ contract("Protocol", function() {
       const computedBS = bsFormula(inputs);
       const localBS = bs.blackScholes(uniswapQuoteNormal, strikePrice, timeToExpiration, volatility, .03, "call");
       const percentDiff = (localBS - fromWei(quote)) / localBS;
-      console.log({quote, uniswapQuoteNormal, localBS, computedBS, percentDiff}, fromWei(quote))
+      assert.strictEqual(localBS.toFixed(2), fromWei(quote).toFixed(2), "Black Scholes estimates are significantly different");
+      assert.strictEqual(percentDiff > 0.01, false, "Black Scholes difference is too high");
 
     })
     // get option quote from liquidity pool
