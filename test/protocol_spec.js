@@ -445,10 +445,10 @@ contract("Protocol", function() {
     })
 
     it('Adds liquidity to the ETH liquidityPool', async () => {
-      const addLiquidity = await ethLiquidityPool.methods.addLiquidity(toEth('1')).send({from: accounts[0], gas: 13289970, value: toEth('1')});
+      const addLiquidity = await ethLiquidityPool.methods.addLiquidity(toEth('10')).send({from: accounts[0], gas: 13289970, value: toEth('10')});
       const liquidityPoolBalance = await ethLiquidityPool.methods.balanceOf(accounts[0]).call();
       const { events: { LiquidityAdded: { event } } } = addLiquidity;
-      assert.strictEqual(liquidityPoolBalance, toEth('1'));
+      assert.strictEqual(liquidityPoolBalance, toEth('10'));
       assert.strictEqual(event, 'LiquidityAdded');
     })
 
@@ -499,21 +499,44 @@ contract("Protocol", function() {
         [expiration.unix(), call, toWei(strikePrice.toString()), USDMock._address, ETH_ADDRESS]
       ).call({from: accounts[0]});
       const volatility = Number(IMPLIED_VOL) / 100;
-      const inputs = {
-        currentPrice: uniswapQuoteNormal,
-        strikePrice,
-        interestRate: 0.03,
-        volatility,
-        timeToExpiration
-      };
-      const computedBS = bsFormula(inputs);
       const localBS = bs.blackScholes(uniswapQuoteNormal, strikePrice, timeToExpiration, volatility, .03, "call");
       const percentDiff = (localBS - fromWei(quote)) / localBS;
       assert.strictEqual(localBS.toFixed(2), fromWei(quote).toFixed(2), "Black Scholes estimates are significantly different");
       assert.strictEqual(percentDiff > 0.01, false, "Black Scholes difference is too high");
+    })
+
+    it('Returns a quote for a USD/ETH call with utilization', async () => {
+
+      const totalLiquidity = await ethLiquidityPool.methods.totalSupply().call();
+      const balance = await ethLiquidityPool.methods.balanceOf(accounts[0]).call();
+      const chainTime = await Time.methods.getCurrent().call();
+      const amount = toEth('5');
+      const expiration = moment(Number(chainTime) * 1000).add('5', 'M');
+      const timeDiff = expiration.unix() - Number(chainTime);
+      const timeToExpiration = genOptionTimeFromUnix(Number(chainTime), expiration.unix());
+      // Amount of ETH to buy 300 USD
+      const uniswapQuote = await ethUsdUniswap.methods.getTokenToEthInputPrice(
+        toEth('100')
+      ).call();
+      const ethUniswapQuote = await ethUsdUniswap.methods.getEthToTokenInputPrice(
+        toEth('1')
+      ).call();
+      const uniswapQuoteNormal = fromWei(ethUniswapQuote);
+      const strikePrice = uniswapQuoteNormal + 20;
+      const quote = await ethLiquidityPool.methods.quotePriceWithUtilization(
+        [expiration.unix(), call, toWei(strikePrice.toString()), USDMock._address, ETH_ADDRESS],
+        amount
+      ).call({from: accounts[0]});
+      const volatility = Number(IMPLIED_VOL) / 100;
+      const utilization = fromWei(amount) / fromWei(totalLiquidity);
+      const utilizationPrice = uniswapQuoteNormal * utilization;
+      const localBS = bs.blackScholes(uniswapQuoteNormal, strikePrice, timeToExpiration, volatility, .03, "call");
+      const finalQuote = utilizationPrice > localBS ? utilizationPrice : localBS;
+      const percentDiff = (finalQuote - fromWei(quote)) / finalQuote;
+      assert.strictEqual(finalQuote.toFixed(2), fromWei(quote).toFixed(2), "Black Scholes estimates are significantly different");
+      assert.strictEqual(percentDiff > 0.01, false, "Black Scholes difference is too high");
 
     })
-    // get option quote from liquidity pool
 
   })
 })

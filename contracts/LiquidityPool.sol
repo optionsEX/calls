@@ -9,6 +9,7 @@ import "./tokens/ERC20.sol";
 import "./tokens/UniversalERC20.sol";
 import "./Protocol.sol";
 import "./PriceFeed.sol";
+import "./OptionRegistry.sol";
 
 contract LiquidityPool is
   BlackScholes,
@@ -20,11 +21,9 @@ contract LiquidityPool is
   using ABDKMathQuad for int256;
 
   address public protocol;
-  address strikeAsset;
-  uint riskFreeRate;
-
-  uint allocated;
-  uint totalLiquidity;
+  address public strikeAsset;
+  uint public riskFreeRate;
+  uint public allocated;
   // Implied volatility for an underlying
   mapping(address => uint) public impliedVolatility;
 
@@ -75,6 +74,11 @@ contract LiquidityPool is
     return PriceFeed(feedAddress);
   }
 
+  function getOptionRegistry() internal returns (OptionRegistry) {
+    address registryAddress = Protocol(protocol).optionRegistry();
+    return OptionRegistry(registryAddress);
+  }
+
   function getUnderlyingPrice(
     Types.OptionSeries memory optionSeries
   )
@@ -120,7 +124,8 @@ contract LiquidityPool is
   {
     uint optionPrice = quotePrice(optionSeries);
     bytes16 underlyingPrice = getUnderlyingPrice(optionSeries).fromUInt();
-    bytes16 utilization = allocated.fromUInt().div(totalLiquidity.fromUInt());
+    bytes16 updatedAllocation = amount.fromUInt();
+    bytes16 utilization = updatedAllocation.div(totalSupply().fromUInt());
     uint utilizationPrice = underlyingPrice.mul(utilization).toUInt();
     return utilizationPrice > optionPrice ? utilizationPrice : optionPrice;
   }
