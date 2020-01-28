@@ -28,6 +28,19 @@ contract OptionRegistry {
     constructor(address usdToken) public {
       usd = usdToken;
     }
+
+    function issue(Types.OptionSeries memory optionSeries)
+      public
+      returns (address)
+    {
+      return issue(
+        optionSeries.underlying,
+        optionSeries.strikeAsset,
+        optionSeries.expiration,
+        optionSeries.flavor,
+        optionSeries.strike
+      );
+    }
     // Note, this just creates an option token, it doesn't guarantee
     // settlement of that token. For guaranteed settlement see the DSFProtocolProxy contract(s)
     function issue(address underlying, address strikeAsset, uint expiration, Types.Flavor flavor, uint strike) public returns (address) {
