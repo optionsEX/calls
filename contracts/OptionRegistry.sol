@@ -20,7 +20,7 @@ contract OptionRegistry {
     mapping(address => mapping(address => uint)) public writers;
     mapping(address => Types.OptionSeries) public seriesInfo;
     mapping(address => uint) public holdersSettlement;
-    mapping(bytes32 => bool) public seriesExists;
+    mapping(bytes32 => address) public seriesAddress;
 
     event OptionTokenCreated(address token);
     event SeriesRedeemed(address series, uint underlyingAmount, uint strikeAmount);
@@ -36,10 +36,10 @@ contract OptionRegistry {
         address u = IERC20(underlying).isETH() ? Constants.ethAddress() : underlying;
         address s = strikeAsset == address(0) ? usd : strikeAsset;
         bytes32 issuanceHash = getIssuanceHash(underlying, strikeAsset, expiration, flavor, strike);
-        require(seriesExists[issuanceHash] == false, "Series already exists");
+        require(seriesAddress[issuanceHash] == address(0), "Series already exists");
         address series = address(new OptionToken(issuanceHash));
         seriesInfo[series] = Types.OptionSeries(expiration, flavor, strike, u, s);
-        seriesExists[issuanceHash] = true;
+        seriesAddress[issuanceHash] = series;
         emit OptionTokenCreated(series);
         return series;
     }
@@ -186,6 +186,10 @@ contract OptionRegistry {
 
    function transferOutStrike(Types.OptionSeries memory _series, uint amount) internal {
      IERC20(_series.strikeAsset).universalTransfer(msg.sender, amount);
+   }
+
+   function getIssuanceHash(Types.OptionSeries memory _series) public returns (bytes32) {
+     return getIssuanceHash(_series.underlying, _series.strikeAsset, _series.expiration, _series.flavor, _series.strike);
    }
 
     /**
