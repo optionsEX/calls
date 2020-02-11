@@ -32,7 +32,7 @@ library UniversalERC20 {
         }
 
         if (token == ZERO_ADDRESS || token == ETH_ADDRESS) {
-            require(from == msg.sender && msg.value >= amount, "msg.value is zero");
+            require(from == msg.sender && msg.value >= amount, "msg.value is less than amount");
             if (to != address(this)) {
                 address(uint160(to)).transfer(amount);
             }

@@ -27,6 +27,11 @@ const SECONDS_IN_DAY = 86400;
 const SECONDS_IN_YEAR = SECONDS_IN_DAY * 365.25;
 const IMPLIED_VOL = '60';
 const getDiffSeconds = (now, future) => (future.unix() - now.unix());
+async function generateExpiration(months = 1) {
+  const chainTime = await Time.methods.getCurrent().call();
+  const expiration = moment(Number(chainTime) * 1000).add(months, 'M');
+  return expiration;
+}
 
 let accounts;
 
@@ -445,10 +450,11 @@ contract("Protocol", function() {
     })
 
     it('Adds liquidity to the ETH liquidityPool', async () => {
-      const addLiquidity = await ethLiquidityPool.methods.addLiquidity(toEth('10')).send({from: accounts[0], gas: 13289970, value: toEth('10')});
+      const amount = toEth('10');
+      const addLiquidity = await ethLiquidityPool.methods.addLiquidity(amount).send({from: accounts[0], gas: 13289970, value: amount});
       const liquidityPoolBalance = await ethLiquidityPool.methods.balanceOf(accounts[0]).call();
       const { events: { LiquidityAdded: { event } } } = addLiquidity;
-      assert.strictEqual(liquidityPoolBalance, toEth('10'));
+      assert.strictEqual(liquidityPoolBalance, amount);
       assert.strictEqual(event, 'LiquidityAdded');
     })
 
@@ -509,8 +515,8 @@ contract("Protocol", function() {
 
       const totalLiquidity = await ethLiquidityPool.methods.totalSupply().call();
       const balance = await ethLiquidityPool.methods.balanceOf(accounts[0]).call();
-      const chainTime = await Time.methods.getCurrent().call();
       const amount = toEth('5');
+      const chainTime = await Time.methods.getCurrent().call();
       const expiration = moment(Number(chainTime) * 1000).add('5', 'M');
       const timeDiff = expiration.unix() - Number(chainTime);
       const timeToExpiration = genOptionTimeFromUnix(Number(chainTime), expiration.unix());
@@ -535,7 +541,75 @@ contract("Protocol", function() {
       const percentDiff = (finalQuote - fromWei(quote)) / finalQuote;
       assert.strictEqual(finalQuote.toFixed(2), fromWei(quote).toFixed(2), "Black Scholes estimates are significantly different");
       assert.strictEqual(percentDiff > 0.01, false, "Black Scholes difference is too high");
+    })
 
+    let putQuote;
+    let putStrikePrice;
+    it('Returns a quote for a USD/ETH put with utilization', async () => {
+
+      const totalLiquidity = await ethLiquidityPool.methods.totalSupply().call();
+      const balance = await ethLiquidityPool.methods.balanceOf(accounts[0]).call();
+      const chainTime = await Time.methods.getCurrent().call();
+      const amount = toEth('5');
+      const expiration = moment(Number(chainTime) * 1000).add('5', 'M');
+      const timeDiff = expiration.unix() - Number(chainTime);
+      const timeToExpiration = genOptionTimeFromUnix(Number(chainTime), expiration.unix());
+      // Amount of ETH to put 300 USD
+      const uniswapQuote = await ethUsdUniswap.methods.getTokenToEthInputPrice(
+        toEth('100')
+      ).call();
+      const ethUniswapQuote = await ethUsdUniswap.methods.getEthToTokenInputPrice(
+        toEth('1')
+      ).call();
+      const uniswapQuoteNormal = fromWei(ethUniswapQuote);
+      const strikePrice = uniswapQuoteNormal - 20;
+      putStrikePrice = strikePrice;
+      const quote = await ethLiquidityPool.methods.quotePriceWithUtilization(
+        [expiration.unix(), put, toWei(strikePrice.toString()), USDMock._address, ZERO_ADDRESS],
+        amount
+      ).call({from: accounts[0]});
+      putQuote = quote;
+      const volatility = Number(IMPLIED_VOL) / 100;
+      const utilization = fromWei(amount) / fromWei(totalLiquidity);
+      const utilizationPrice = uniswapQuoteNormal * utilization;
+      const localBS = bs.blackScholes(uniswapQuoteNormal, strikePrice, timeToExpiration, volatility, .03, "put");
+      const finalQuote = utilizationPrice > localBS ? utilizationPrice : localBS;
+      const percentDiff = (finalQuote - fromWei(quote)) / finalQuote;
+      assert.strictEqual(finalQuote.toFixed(2), fromWei(quote).toFixed(2), "Black Scholes estimates are significantly different");
+      assert.strictEqual(percentDiff > 0.01, false, "Black Scholes difference is too high");
+    });
+
+    it('LP Writes a USD/ETH put for premium', async () => {
+      const strikeAddress = await ethLiquidityPool.methods.strikeAsset().call();
+      // 0.01 ETH
+      const amount = toEth('1').slice(0, -2);
+      const expiration = await generateExpiration();
+      const USDMockAddress = USDMock._address;
+      const seriesInfo = [expiration.unix(), put, toWei(putStrikePrice.toString()), USDMockAddress, strikeAddress];
+      const quote = await ethLiquidityPool.methods.quotePriceWithUtilization(
+        seriesInfo,
+        amount
+      ).call({from: accounts[0]});
+      const premium = fromWei(quote);
+      const escrowAmount = fromWei(amount) * putStrikePrice
+      const ethBalance = fromWei(await getBalance(ethLiquidityPool._address));
+      const expectedBalance = ethBalance + premium - escrowAmount;
+      const issue = await optionRegistry.methods.issue(seriesInfo).send({from: accounts[0]});
+      const issueHash = await optionRegistry.methods.getIssuanceHash(seriesInfo).call();
+      const issueAddress = await optionRegistry.methods.getSeriesAddress(issueHash).call();
+      const optionToken = createERC20Instance(issueAddress);
+      const poolBalance = await optionToken.methods.balanceOf(ethLiquidityPool._address).call();
+      const writerBalance = await optionToken.methods.balanceOf(accounts[0]).call();
+      const seriesInfoStruct = await optionRegistry.methods.getSeriesInfo(issueAddress).call();
+      const write = await ethLiquidityPool.methods.writeOption(
+        issueAddress,
+        amount
+      ).send({from: accounts[0], value: quote, gas: 13289970});
+      const newPoolBalance = await optionToken.methods.balanceOf(ethLiquidityPool._address).call();
+      const newWriterBalance = await optionToken.methods.balanceOf(accounts[0]).call();
+      const newEthBalance = fromWei(await getBalance(ethLiquidityPool._address));
+      assert.strictEqual(expectedBalance.toFixed(2), newEthBalance.toFixed(2), "expected balance does not match actual");
+      assert.strictEqual(Number(newWriterBalance) - Number(writerBalance), Number(amount), "writer has been credited with incorrect amount of option token");
     })
 
   })

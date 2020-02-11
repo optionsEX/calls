@@ -6,6 +6,7 @@ import "./tokens/OptionToken.sol";
 import "./tokens/UniversalERC20.sol";
 import { Types } from "./lib/Types.sol";
 import { Constants } from "./lib/Constants.sol";
+import { OptionsCompute } from "./lib/OptionsCompute.sol";
 
 /// @author Brian Wheeler - (DSF Protocol)
 contract OptionRegistry {
@@ -20,7 +21,7 @@ contract OptionRegistry {
     mapping(address => mapping(address => uint)) public writers;
     mapping(address => Types.OptionSeries) public seriesInfo;
     mapping(address => uint) public holdersSettlement;
-    mapping(bytes32 => address) public seriesAddress;
+    mapping(bytes32 => address) seriesAddress;
 
     event OptionTokenCreated(address token);
     event SeriesRedeemed(address series, uint underlyingAmount, uint strikeAmount);
@@ -41,6 +42,7 @@ contract OptionRegistry {
         optionSeries.strike
       );
     }
+
     // Note, this just creates an option token, it doesn't guarantee
     // settlement of that token. For guaranteed settlement see the DSFProtocolProxy contract(s)
     function issue(address underlying, address strikeAsset, uint expiration, Types.Flavor flavor, uint strike) public returns (address) {
@@ -176,10 +178,7 @@ contract OptionRegistry {
     }
 
     function openPut(address strikeAsset, uint amount, uint strike) internal {
-        require(msg.value == 0, "msg.value is not zero");
-        uint escrow = amount * strike;
-        require(escrow / amount == strike, "escrow does not balance");
-        escrow /= 1 ether;
+        uint escrow = OptionsCompute.computeEscrow(amount, strike);
         IERC20(strikeAsset).universalTransferFrom(msg.sender, address(this), escrow);
     }
 
@@ -199,6 +198,17 @@ contract OptionRegistry {
 
    function transferOutStrike(Types.OptionSeries memory _series, uint amount) internal {
      IERC20(_series.strikeAsset).universalTransfer(msg.sender, amount);
+   }
+
+   function getSeriesAddress(bytes32 issuanceHash) public view returns (address) {
+     return seriesAddress[issuanceHash];
+   }
+
+   function getSeriesInfo(address series)
+     public
+     view
+     returns (Types.OptionSeries memory) {
+     return seriesInfo[series];
    }
 
    function getIssuanceHash(Types.OptionSeries memory _series) public returns (bytes32) {

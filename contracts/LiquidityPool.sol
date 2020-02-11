@@ -3,6 +3,7 @@ pragma experimental ABIEncoderV2;
 
 import { Constants } from "./lib/Constants.sol";
 import { Types } from "./lib/Types.sol";
+import { OptionsCompute } from "./lib/OptionsCompute.sol";
 import "./lib/ABDKMathQuad.sol";
 import "./lib/BlackScholes.sol";
 import "./tokens/ERC20.sol";
@@ -20,6 +21,8 @@ contract LiquidityPool is
   using ABDKMathQuad for bytes16;
   using ABDKMathQuad for int256;
 
+  bytes16 private constant ONE = 0x3fff0000000000000000000000000000;
+
   address public protocol;
   address public strikeAsset;
   uint public riskFreeRate;
@@ -30,9 +33,10 @@ contract LiquidityPool is
   event LiquidityAdded(uint amount);
   event UnderlyingAdded(address underlying);
   event ImpliedVolatilityUpdated(address underlying, uint iv);
+  event WriteOption(uint amount, uint premium, uint escrow, address buyer);
 
   constructor(address _protocol, address _strikeAsset, address underlying, uint rfr, uint iv) public {
-    strikeAsset = _strikeAsset;
+    strikeAsset = IERC20(_strikeAsset).isETH() ? Constants.ethAddress() : _strikeAsset;
     riskFreeRate = rfr;
     address underlyingAddress = IERC20(underlying).isETH() ? Constants.ethAddress() : underlying;
     impliedVolatility[underlyingAddress] = iv;
@@ -122,12 +126,39 @@ contract LiquidityPool is
     public
     returns (uint)
   {
-    uint optionPrice = quotePrice(optionSeries);
+    bytes16 bytesAmount = amount.fromUInt();
+    uint optionQuote = quotePrice(optionSeries);
+    int8 isNegitive = bytesAmount.cmp(ONE);
+    uint optionPrice = isNegitive < 0 ? optionQuote.fromUInt().mul(bytesAmount).toUInt() : optionQuote;
     bytes16 underlyingPrice = getUnderlyingPrice(optionSeries).fromUInt();
-    bytes16 updatedAllocation = amount.fromUInt();
-    bytes16 utilization = updatedAllocation.div(totalSupply().fromUInt());
+    bytes16 utilization = bytesAmount.div(totalSupply().fromUInt());
     uint utilizationPrice = underlyingPrice.mul(utilization).toUInt();
     return utilizationPrice > optionPrice ? utilizationPrice : optionPrice;
+  }
+
+  function writeOption(
+    address seriesAddress,
+    uint amount
+  )
+    public
+    payable
+    returns (uint)
+  {
+    OptionRegistry optionRegistry = getOptionRegistry();
+    Types.OptionSeries memory optionSeries = optionRegistry.getSeriesInfo(seriesAddress);
+    require(optionSeries.strikeAsset == strikeAsset, "incorrect strike asset");
+    uint premium = quotePriceWithUtilization(optionSeries, amount);
+    IERC20(optionSeries.strikeAsset).universalTransferFrom(msg.sender, address(this), premium);
+    uint escrow = OptionsCompute.computeEscrow(amount, optionSeries.strike);
+    require(IERC20(strikeAsset).universalBalanceOf(address(this)) >= escrow, "Insufficient balance");
+    if (IERC20(strikeAsset).isETH()) {
+      optionRegistry.open.value(escrow)(seriesAddress, amount);
+      emit WriteOption(amount, premium, escrow, msg.sender);
+    } else {
+      optionRegistry.open(seriesAddress, amount);
+      emit WriteOption(amount, premium, escrow, msg.sender);
+    }
+    IERC20(seriesAddress).universalTransfer(msg.sender, amount);
   }
 
 }
