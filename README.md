@@ -22,3 +22,6 @@ specific test cases can be run:
 embark run PATH_TO_FILE
 ```
 
+## Built With
+
+* [Embark](https://framework.embarklabs.io/) - Framework for serverless Decentralized Applications using Ethereum
