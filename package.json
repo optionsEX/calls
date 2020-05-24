@@ -1,6 +1,6 @@
 {
   "name": "calls",
-  "version": "0.0.1",
+  "version": "1.22.4",
   "description": "",
   "scripts": {
     "test": "embark test"
@@ -8,7 +8,9 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
-  "devDependencies": {},
+  "devDependencies": {
+    "yarn": "1.22.4"
+  },
   "dependencies": {
     "black-scholes": "^1.1.0",
     "bs-formula": "^0.0.1",
