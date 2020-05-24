@@ -14,6 +14,7 @@
   "dependencies": {
     "black-scholes": "^1.1.0",
     "bs-formula": "^0.0.1",
+    "embark": "^6.0.0",
     "moment": "^2.24.0"
   }
 }

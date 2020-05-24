@@ -1,6 +1,6 @@
 /*global contract, it*/
-const BlackScholes = require('Embark/contracts/BlackScholes');
-const ERC20 = require('Embark/contracts/ERC20');
+const BlackScholes = artifacts.require('BlackScholes');
+const ERC20 = artifacts.require('ERC20');
 const moment = require('moment');
 const bs = require('black-scholes');
 const { toEth, createERC20Instance, fromWei } = require('../utils/testUtils')
@@ -22,7 +22,7 @@ const noDiscount = '1000000000000000000'
 let accounts;
 
 config({
-  deployment: {
+  blockchain: {
     // The order here corresponds to the order of `web3.eth.getAccounts`, so the first one is the `defaultAccount`
     accounts: [
       {
@@ -33,8 +33,10 @@ config({
     ]
   },
   contracts: {
-    "BlackScholes": {},
-    "NormalDist": {}
+    deploy: {
+      "BlackScholes": {},
+      "NormalDist": {}
+    }
   }
 }, (_err, web3_accounts) => {
   accounts = web3_accounts;

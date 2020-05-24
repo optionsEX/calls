@@ -1,15 +1,15 @@
 /*global contract, it*/
-const protocol = require('Embark/contracts/Protocol');
-const optionRegistry = require('Embark/contracts/OptionRegistry');
-const exchange = require('Embark/contracts/Exchange');
-const liquidityPools = require('Embark/contracts/LiquidityPools');
-const uniswapFactory = require('Embark/contracts/uniswap_factory');
-const uniswapExchange = require('Embark/contracts/uniswap_exchange');
-const priceFeed = require('Embark/contracts/PriceFeed');
-const Time = require('Embark/contracts/Time');
-const ERC20 = require('Embark/contracts/ERC20');
-const USDMock = require('Embark/contracts/USDMock');
-const NewToken = require('Embark/contracts/NewToken');
+const protocol = artifacts.require('Protocol');
+const optionRegistry = artifacts.require('OptionRegistry');
+const exchange = artifacts.require('Exchange');
+const liquidityPools = artifacts.require('LiquidityPools');
+const uniswapFactory = artifacts.require('uniswap_factory');
+const uniswapExchange = artifacts.require('uniswap_exchange');
+const priceFeed = artifacts.require('PriceFeed');
+const Time = artifacts.require('Time');
+const ERC20 = artifacts.require('ERC20');
+const USDMock = artifacts.require('USDMock');
+const NewToken = artifacts.require('NewToken');
 const moment = require('moment');
 const bs = require('black-scholes');
 const bsFormula = require('bs-formula');
@@ -34,9 +34,10 @@ async function generateExpiration(months = 1) {
 }
 
 let accounts;
+const gas = 5000000
 
 config({
-  deployment: {
+  blockchain: {
     // The order here corresponds to the order of `web3.eth.getAccounts`, so the first one is the `defaultAccount`
     accounts: [
       {
@@ -47,6 +48,7 @@ config({
     ]
   },
   contracts: {
+    deploy: {
     "Constants": {},
     "Exchange": {},
     "LiquidityPools": {},
@@ -73,7 +75,11 @@ config({
       "args": ["$uniswap_factory"]
     },
     "uniswap_exchange": {},
-    "uniswap_factory": {}
+    "uniswap_factory": {},
+    "UniswapV2Factory": {
+      "args": [ZERO_ADDRESS]
+    }
+    }
   }
 }, (_err, web3_accounts) => {
   accounts = web3_accounts;
@@ -116,7 +122,7 @@ contract("Protocol", function() {
     });
 
     it('creates an option token series', async () => {
-      const issue = await optionRegistry.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), call, strike).send({from: accounts[0]})
+      const issue = await optionRegistry.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, expiration.unix(), call, strike).send({from: accounts[0], gas})
       const { events: { OptionTokenCreated } } = issue
       assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated')
       optionToken = createERC20Instance(OptionTokenCreated.returnValues.token)
@@ -129,7 +135,7 @@ contract("Protocol", function() {
     })
 
     it('writer transfers part of balance to new account', async () => {
-      await optionToken.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0]})
+      await optionToken.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0], gas})
       const balance = await optionToken.methods.balanceOf(accounts[1]).call()
       assert.strictEqual(balance, toEth('1'))
     })
@@ -201,7 +207,7 @@ contract("Protocol", function() {
     })
 
     it('writer transfers part of erc20 call balance to new account', async () => {
-      await erc20CallOption.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0]})
+      await erc20CallOption.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0], gas})
       const balance = await erc20CallOption.methods.balanceOf(accounts[1]).call()
       assert.strictEqual(balance, toEth('1'))
     })
@@ -265,7 +271,7 @@ contract("Protocol", function() {
     })
 
     it('writer transfers part of put balance to new account', async () => {
-      await putOption.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0]})
+      await putOption.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0], gas})
       const balance = await putOption.methods.balanceOf(accounts[1]).call()
       assert.strictEqual(balance, toEth('1'))
     })
@@ -317,7 +323,7 @@ contract("Protocol", function() {
     })
 
     it('writer transfers part of erc20 put balance to new account', async () => {
-      await erc20PutOption.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0]});
+      await erc20PutOption.methods.transfer(accounts[1], toEth('1')).send({from: accounts[0], gas});
       const balance = await erc20PutOption.methods.balanceOf(accounts[1]).call();
       assert.strictEqual(balance, toEth('1'));
     })
@@ -346,16 +352,16 @@ contract("Protocol", function() {
 
     it('Creates an eth call option and deposits it on the exchange', async () => {
       optionTokenExpiration = moment(currentTime).add('12', 'M');
-      const issue = await optionRegistry.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, optionTokenExpiration.unix(), call, strike).send({from: accounts[0]});
+      const issue = await optionRegistry.methods.issue(ZERO_ADDRESS, ZERO_ADDRESS, optionTokenExpiration.unix(), call, strike).send({from: accounts[0], gas});
       const { events: { OptionTokenCreated } } = issue;
       assert.strictEqual(OptionTokenCreated.event, 'OptionTokenCreated');
       optionToken = createERC20Instance(OptionTokenCreated.returnValues.token);
-      const opened = await optionRegistry.methods.open(optionToken._address, toEth('2')).send({from: accounts[0], value: toEth('2')});
+      const opened = await optionRegistry.methods.open(optionToken._address, toEth('2')).send({from: accounts[0], value: toEth('2'), gas});
       const balance = await optionToken.methods.balanceOf(accounts[0]).call();
       assert.strictEqual(balance, toEth('2'));
-      await optionToken.methods.approve(exchange._address, balance).send({from: accounts[0]});
+      await optionToken.methods.approve(exchange._address, balance).send({from: accounts[0], gas});
       // Exchange
-      const deposit = await exchange.methods.depositToken(optionToken._address, balance).send({from: accounts[0]});
+      const deposit = await exchange.methods.depositToken(optionToken._address, balance).send({from: accounts[0], gas});
       const { returnValues: { balance: bal }, event } = deposit.events.Deposit;
       assert.strictEqual(bal, balance);
       assert.strictEqual(event, 'Deposit');
@@ -369,15 +375,15 @@ contract("Protocol", function() {
         toEth('2'),
         optionTokenExpiration.unix(),
         '1'
-      ).send({from: accounts[0]});
+      ).send({from: accounts[0], gas});
       const { event } = order.events.Order
       assert.strictEqual(event, 'Order')
     })
 
     it('Buys the options from a holder of strike token', async () => {
       const usdBalance = await USDMock.methods.balanceOf(accounts[1]).call();
-      await USDMock.methods.approve(exchange._address, toEth('26')).send({from: accounts[1]});
-      const deposit = await exchange.methods.depositToken(USDMock._address, toEth('26')).send({from: accounts[1]});
+      await USDMock.methods.approve(exchange._address, toEth('26')).send({from: accounts[1], gas});
+      const deposit = await exchange.methods.depositToken(USDMock._address, toEth('26')).send({from: accounts[1], gas});
       const trade = await exchange.methods.trade(
         USDMock._address,
         toEth('50'),
@@ -387,7 +393,7 @@ contract("Protocol", function() {
         '1',
         accounts[0],
         toEth('25')
-      ).send({from: accounts[1]});
+      ).send({from: accounts[1], gas});
       const optionBalance = await exchange.methods.balanceOf(optionToken._address, accounts[1]).call();
       const { events: Trade } = trade;
       assert.strictEqual(optionBalance, toEth('1'));
@@ -424,8 +430,8 @@ contract("Protocol", function() {
 
     it('Adds liquidity to the liquidityPool', async () => {
       const balance = await USDMock.methods.balanceOf(accounts[0]).call();
-      await USDMock.methods.approve(liquidityPool._address, toEth('1')).send({from: accounts[0]});
-      const addLiquidity = await liquidityPool.methods.addLiquidity(toEth('1')).send({from: accounts[0], gas: 13289970});
+      await USDMock.methods.approve(liquidityPool._address, toEth('1')).send({from: accounts[0], gas});
+      const addLiquidity = await liquidityPool.methods.addLiquidity(toEth('1')).send({from: accounts[0], gas});
       const liquidityPoolBalance = await liquidityPool.methods.balanceOf(accounts[0]).call();
       const { events: { LiquidityAdded: { event } } } = addLiquidity;
       assert.strictEqual(liquidityPoolBalance, toEth('1'));
@@ -451,7 +457,7 @@ contract("Protocol", function() {
 
     it('Adds liquidity to the ETH liquidityPool', async () => {
       const amount = toEth('10');
-      const addLiquidity = await ethLiquidityPool.methods.addLiquidity(amount).send({from: accounts[0], gas: 13289970, value: amount});
+      const addLiquidity = await ethLiquidityPool.methods.addLiquidity(amount).send({from: accounts[0], gas, value: amount});
       const liquidityPoolBalance = await ethLiquidityPool.methods.balanceOf(accounts[0]).call();
       const { events: { LiquidityAdded: { event } } } = addLiquidity;
       assert.strictEqual(liquidityPoolBalance, amount);
@@ -461,9 +467,9 @@ contract("Protocol", function() {
     it('Adds additional liquidity from new account', async () => {
       const balance = await USDMock.methods.balanceOf(accounts[1]).call();
       const sendAmount = toEth('9');
-      await USDMock.methods.approve(liquidityPool._address, sendAmount).send({from: accounts[1]});
+      await USDMock.methods.approve(liquidityPool._address, sendAmount).send({from: accounts[1], gas});
       const totalSupply = await liquidityPool.methods.totalSupply().call();
-      const addLiquidity = await liquidityPool.methods.addLiquidity(sendAmount).send({from: accounts[1]});
+      const addLiquidity = await liquidityPool.methods.addLiquidity(sendAmount).send({from: accounts[1], gas});
       const liquidityPoolBalance = await liquidityPool.methods.balanceOf(accounts[1]).call();
       const newTotalSupply = await liquidityPool.methods.totalSupply().call();
 
@@ -594,7 +600,7 @@ contract("Protocol", function() {
       const escrowAmount = fromWei(amount) * putStrikePrice
       const ethBalance = fromWei(await getBalance(ethLiquidityPool._address));
       const expectedBalance = ethBalance + premium - escrowAmount;
-      const issue = await optionRegistry.methods.issue(seriesInfo).send({from: accounts[0]});
+      const issue = await optionRegistry.methods.issue(seriesInfo).send({from: accounts[0], gas});
       const issueHash = await optionRegistry.methods.getIssuanceHash(seriesInfo).call();
       const issueAddress = await optionRegistry.methods.getSeriesAddress(issueHash).call();
       const optionToken = createERC20Instance(issueAddress);
@@ -604,7 +610,7 @@ contract("Protocol", function() {
       const write = await ethLiquidityPool.methods.writeOption(
         issueAddress,
         amount
-      ).send({from: accounts[0], value: quote, gas: 13289970});
+      ).send({from: accounts[0], value: quote, gas});
       const newPoolBalance = await optionToken.methods.balanceOf(ethLiquidityPool._address).call();
       const newWriterBalance = await optionToken.methods.balanceOf(accounts[0]).call();
       const newEthBalance = fromWei(await getBalance(ethLiquidityPool._address));
@@ -613,4 +619,5 @@ contract("Protocol", function() {
     })
 
   })
+  // implement volatility smile
 })
