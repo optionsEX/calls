@@ -8,7 +8,7 @@ import { Types } from "./lib/Types.sol";
 import { Constants } from "./lib/Constants.sol";
 import { OptionsCompute } from "./lib/OptionsCompute.sol";
 
-/// @author Brian Wheeler - (DSF Protocol)
+// @author Brian Wheeler - (DSF Protocol)
 contract OptionRegistry {
 
     using UniversalERC20 for IERC20;

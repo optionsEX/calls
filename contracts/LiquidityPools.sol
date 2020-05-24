@@ -27,27 +27,6 @@ contract LiquidityPools {
     LiquidityPool liquidityPool = LiquidityPool(lp);
   }
 
-  /* function priceQuote( */
-  /*   Types.OptionSeries memory optionSeries, */
-  /*   uint amount */
-  /* ) */
-  /*   public */
-  /*   view */
-  /*   returns (uint) */
-  /* { */
-  /*   address lpAddress = strikeAssets[optionSeries.strikeAsset]; */
-  /*   require(lpAddress != address(0), "Strike asset does not exist"); */
-  /*   LiquidityPool lp = LiquidityPool(lpAddress); */
-  /*   uint iv = lp.impliedVolatility(optionSeries.underlying); */
-  /*   require(iv > 0, "Implied volatility not found"); */
-  /*   PriceFeed priceFeed = PriceFeed(protocol.priceFeed); */
-  /*   uint underlyingPrice = priceFeed.getPriceQuote( */
-  /*     optionSeries.underlying, */
-  /*     optionSeries.strikeAsset, */
-  /*     amount */
-  /*   ); */
-  /* } */
-
   function setup(address _protocol) public {
     require(address(protocol) == address(0), "protocol already set");
     protocol = _protocol;
