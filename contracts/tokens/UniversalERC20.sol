@@ -65,11 +65,11 @@ library UniversalERC20 {
             return 18;
         }
 
-        (bool success, bytes memory data) = address(token).staticcall.gas(5000)(
+        (bool success, bytes memory data) = address(token).staticcall{gas:5000}(
             abi.encodeWithSignature("decimals()")
         );
         if (!success) {
-            (success, data) = address(token).staticcall.gas(5000)(
+            (success, data) = address(token).staticcall{gas:5000}(
                 abi.encodeWithSignature("DECIMALS()")
             );
         }

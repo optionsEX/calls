@@ -78,7 +78,8 @@ config({
     "uniswap_factory": {},
     "UniswapV2Factory": {
       "args": [ZERO_ADDRESS]
-    }
+    },
+    "WETH9": {}
     }
   }
 }, (_err, web3_accounts) => {

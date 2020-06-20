@@ -1,7 +1,7 @@
-pragma solidity ^0.5;
+pragma solidity >=0.5.0 <0.7.0;
 
 
-contract BidderInterface {
-    function receiveETH(address series, uint256 amount) public;
-    function receiveUSD(address series, uint256 amount) public;
+interface BidderInterface {
+    function receiveETH(address series, uint256 amount) external;
+    function receiveUSD(address series, uint256 amount) external;
 }

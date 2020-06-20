@@ -1,4 +1,5 @@
-pragma solidity =0.5.16;
+pragma solidity >=0.5.0 <0.7.0;
+//pragma solidity =0.5.16;
 
 import './interfaces/IUniswapV2Pair.sol';
 import './UniswapV2ERC20.sol';
@@ -8,7 +9,8 @@ import './interfaces/IERC20.sol';
 import './interfaces/IUniswapV2Factory.sol';
 import './interfaces/IUniswapV2Callee.sol';
 
-contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
+// is IUniswapV2Pair due to conflict with UniswapV2ERC20
+contract UniswapV2Pair is UniswapV2ERC20 {
     using SafeMath  for uint;
     using UQ112x112 for uint224;
 

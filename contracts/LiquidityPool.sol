@@ -152,7 +152,7 @@ contract LiquidityPool is
     uint escrow = OptionsCompute.computeEscrow(amount, optionSeries.strike);
     require(IERC20(strikeAsset).universalBalanceOf(address(this)) >= escrow, "Insufficient balance");
     if (IERC20(strikeAsset).isETH()) {
-      optionRegistry.open.value(escrow)(seriesAddress, amount);
+      optionRegistry.open{value : escrow}(seriesAddress, amount);
       emit WriteOption(amount, premium, escrow, msg.sender);
     } else {
       optionRegistry.open(seriesAddress, amount);

@@ -32,7 +32,7 @@ contract PriceFeed {
        if (!fromToken.isETH()) {
            IUniswapExchange fromExchange = uniswapFactory.getExchange(fromToken);
            if (fromExchange != IUniswapExchange(0)) {
-               (bool success, bytes memory data) = address(fromExchange).staticcall.gas(200000)(
+               (bool success, bytes memory data) = address(fromExchange).staticcall{gas:200000}(
                    abi.encodeWithSelector(
                        fromExchange.getTokenToEthInputPrice.selector,
                        returnAmount
@@ -49,7 +49,7 @@ contract PriceFeed {
        if (!toToken.isETH()) {
            IUniswapExchange toExchange = uniswapFactory.getExchange(toToken);
            if (toExchange != IUniswapExchange(0)) {
-               (bool success, bytes memory data) = address(toExchange).staticcall.gas(200000)(
+               (bool success, bytes memory data) = address(toExchange).staticcall{gas : 200000}(
                    abi.encodeWithSelector(
                        toExchange.getEthToTokenInputPrice.selector,
                        returnAmount
