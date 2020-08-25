@@ -5,11 +5,14 @@ const exchange = artifacts.require('Exchange');
 const liquidityPools = artifacts.require('LiquidityPools');
 const uniswapFactory = artifacts.require('uniswap_factory');
 const uniswapExchange = artifacts.require('uniswap_exchange');
+const uniswapV2Factory = artifacts.require('UniswapV2Factory');
+const uniswapV2Router = artifacts.require('UniswapV2Router01');
 const priceFeed = artifacts.require('PriceFeed');
 const Time = artifacts.require('Time');
 const ERC20 = artifacts.require('ERC20');
 const USDMock = artifacts.require('USDMock');
 const NewToken = artifacts.require('NewToken');
+const WETH9 = artifacts.require('WETH9');
 const moment = require('moment');
 const bs = require('black-scholes');
 const bsFormula = require('bs-formula');
@@ -79,6 +82,9 @@ config({
     "UniswapV2Factory": {
       "args": [ZERO_ADDRESS]
     },
+    "UniswapV2Router01": {
+      "args": ["$UniswapV2Factory", "$WETH9"]
+    },
     "WETH9": {}
     }
   }
@@ -106,6 +112,9 @@ contract("Protocol", function() {
       const init = await uniswapFactory.methods.initializeFactory(uniswapExchange._address).send({from: accounts[2]});
       const create = await uniswapFactory.methods.createExchange(USDMock._address).send({from: accounts[2]});
       const { events: { NewExchange } } = create;
+      //const wethUsdCreate = await uniswapV2Factory.methods.createPair(WETH9._address, USDMock._address).send({from: accounts[0]});
+      //const { events: { PairCreated } } = wethUsdCreate
+      //console.log({PairCreated});
       const usdUniswapAddress = NewExchange.returnValues.exchange;
       ethUsdUniswap = createUniswapExchangeInstance(usdUniswapAddress);
       const usdAmount = 300 * 10;
@@ -120,6 +129,21 @@ contract("Protocol", function() {
       });
       const { events: { AddLiquidity, Transfer } } = addedLiquidity
       assert.strictEqual(AddLiquidity.returnValues.token_amount, usdWei, "supplied token amount does not match expected");
+      await USDMock.methods.mint(accounts[2], usdWei).send({from: accounts[2]});
+      await USDMock.methods.approve(uniswapV2Router._address, usdWei).send({from: accounts[2]});
+      const fatoryAddress = uniswapV2Factory._address
+      const routerFactory = await uniswapV2Router.methods.factory().call();
+      console.log({fatoryAddress, routerFactory})
+      const addLiquidityV2 = await uniswapV2Router.methods.addLiquidityETH(
+        USDMock._address,
+        usdAmount,
+        toEth('10'),
+        toEth('10'),
+        accounts[2],
+        expiration.unix()
+      ).send({from: accounts[2], value: toEth('10')});
+      const lEvents = addLiquidityV2.events
+      console.log({addLiquidityV2}, lEvents)
     });
 
     it('creates an option token series', async () => {

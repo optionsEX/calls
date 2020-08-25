@@ -1,6 +1,6 @@
-const ERC20 = require('Embark/contracts/ERC20')
-const LiquidityPool = require('Embark/contracts/LiquidityPool');
-const UniswapExchange = require('Embark/contracts/uniswap_exchange');
+const ERC20 = artifacts.require('ERC20')
+const LiquidityPool = artifacts.require('LiquidityPool');
+const UniswapExchange = artifacts.require('uniswap_exchange');
 
 module.exports.toEth = function(str) {
   return str + '000000000000000000';

@@ -9,7 +9,6 @@ import './interfaces/IERC20.sol';
 import './interfaces/IUniswapV2Factory.sol';
 import './interfaces/IUniswapV2Callee.sol';
 
-// is IUniswapV2Pair due to conflict with UniswapV2ERC20
 contract UniswapV2Pair is UniswapV2ERC20 {
     using SafeMath  for uint;
     using UQ112x112 for uint224;
