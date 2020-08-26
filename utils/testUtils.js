@@ -1,6 +1,7 @@
 const ERC20 = artifacts.require('ERC20')
 const LiquidityPool = artifacts.require('LiquidityPool');
 const UniswapExchange = artifacts.require('uniswap_exchange');
+const UniswapV2Pair = artifacts.require('UniswapV2Pair');
 
 module.exports.toEth = function(str) {
   return str + '000000000000000000';
@@ -20,6 +21,10 @@ module.exports.createLiquidityPoolInstance = function(address) {
 
 module.exports.createUniswapExchangeInstance = function(address) {
   return new web3.eth.Contract(UniswapExchange._jsonInterface, address);
+}
+
+module.exports.createUniswapPairInstance = function(address) {
+  return new web3.eth.Contract(UniswapV2Pair._jsonInterface, address);
 }
 
 module.exports.fromWei = function(str) {

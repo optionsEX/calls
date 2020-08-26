@@ -16,7 +16,7 @@ const WETH9 = artifacts.require('WETH9');
 const moment = require('moment');
 const bs = require('black-scholes');
 const bsFormula = require('bs-formula');
-const { toEth, createERC20Instance, createLiquidityPoolInstance, createUniswapExchangeInstance, fromWei, getBalance, increaseTime, genOptionTimeFromUnix, toWei } = require('../utils/testUtils');
+const { toEth, createERC20Instance, createLiquidityPoolInstance, createUniswapExchangeInstance, createUniswapPairInstance, fromWei, getBalance, increaseTime, genOptionTimeFromUnix, toWei } = require('../utils/testUtils');
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const ETH_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
@@ -131,19 +131,20 @@ contract("Protocol", function() {
       assert.strictEqual(AddLiquidity.returnValues.token_amount, usdWei, "supplied token amount does not match expected");
       await USDMock.methods.mint(accounts[2], usdWei).send({from: accounts[2]});
       await USDMock.methods.approve(uniswapV2Router._address, usdWei).send({from: accounts[2]});
-      const fatoryAddress = uniswapV2Factory._address
-      const routerFactory = await uniswapV2Router.methods.factory().call();
-      console.log({fatoryAddress, routerFactory})
       const addLiquidityV2 = await uniswapV2Router.methods.addLiquidityETH(
         USDMock._address,
-        usdAmount,
+        usdWei,
         toEth('10'),
         toEth('10'),
         accounts[2],
         expiration.unix()
       ).send({from: accounts[2], value: toEth('10')});
       const lEvents = addLiquidityV2.events
-      console.log({addLiquidityV2}, lEvents)
+      const wethUsdAddress = await uniswapV2Factory.methods.getPair(WETH9._address, USDMock._address).call();
+      const wethUsdPair = createUniswapPairInstance(wethUsdAddress);
+      const wethUsdReserves = await wethUsdPair.methods.getReserves().call();
+      const quote = await uniswapV2Router.methods.quote(toEth('3'), wethUsdReserves['0'], wethUsdReserves['1']).call();
+      assert.strictEqual(fromWei(quote), 0.01);
     });
 
     it('creates an option token series', async () => {
